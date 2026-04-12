@@ -1,321 +1,379 @@
 'use strict';
 
 const utils = require('@iobroker/adapter-core');
-const express = require('express');
-const { TouchlineClient } = require('./lib/touchline-client');
-
-const NAMED_ID_CANDIDATES = ['id', 'ID', '_id', 'uuid', 'name', 'roomName', 'zoneName', 'deviceName'];
+const TouchlineLegacyAPI = require('./lib/api-legacy');
+const TouchlineSLAPI = require('./lib/api-sl');
 
 class TouchlineAdapter extends utils.Adapter {
     constructor(options = {}) {
         super({ ...options, name: 'touchline' });
 
+        this.api = null;
+        this.apiType = null;     // 'legacy' | 'sl'
         this.pollTimer = null;
-        this.bridgeServer = null;
-        this.lastSnapshot = null;
-        this.objectCache = new Set();
+        this.connected = false;
 
         this.on('ready', this.onReady.bind(this));
+        this.on('stateChange', this.onStateChange.bind(this));
+        this.on('message', this.onMessage.bind(this));
         this.on('unload', this.onUnload.bind(this));
     }
 
+    // ─────────────────────────────────────────────
+    // Lifecycle
+    // ─────────────────────────────────────────────
+
     async onReady() {
-        await this.setStateAsync('info.connection', false, true);
-        await this.setStateAsync('info.lastError', '', true);
-        await this.setStateAsync('info.baseUrl', '', true);
+        this.setState('info.connection', false, true);
 
-        if (!this.config.localIp || !String(this.config.localIp).trim()) {
-            this.log.error('Please configure a local IP / hostname of the Touchline controller.');
+        const host = (this.config.host || '').trim();
+        if (!host) {
+            this.log.error('Keine IP-Adresse konfiguriert. Bitte in den Adaptereinstellungen eintragen.');
             return;
         }
 
-        this.client = new TouchlineClient({
-            host: this.config.localIp.trim(),
-            username: this.config.username,
-            password: this.config.password,
-            token: this.config.token,
-            protocol: this.config.protocol || 'http',
-            port: this.config.apiPort || 80,
-            requestTimeout: this.config.requestTimeout || 5000,
-        });
-
-        const baseUrl = this.client.buildBaseUrl();
-        this.log.info(`Touchline target: ${baseUrl}`);
-        await this.setStateAsync('info.baseUrl', baseUrl, true);
-
-        if (this.config.enableWebServer) {
-            this.startBridgeServer();
-        }
-
-        await this.refresh();
-        this.schedulePolling();
-    }
-
-    schedulePolling() {
-        const intervalSeconds = Math.max(10, Number(this.config.pollInterval) || 60);
-        this.pollTimer = setInterval(() => {
-            this.refresh().catch(error => this.log.warn(`Refresh failed: ${error.message}`));
-        }, intervalSeconds * 1000);
-    }
-
-    startBridgeServer() {
-        const app = express();
-        app.use(express.json());
-
-        app.get('/health', (_req, res) => {
-            res.json({
-                ok: true,
-                connected: this.lastSnapshot !== null,
-                fetchedAt: this.lastSnapshot?.fetchedAt || null,
-                apiType: this.lastSnapshot?.apiType || null,
-                baseUrl: this.lastSnapshot?.baseUrl || this.client?.buildBaseUrl() || null,
-            });
-        });
-
-        app.get('/api/states', async (_req, res) => {
-            if (!this.lastSnapshot) {
-                return res.status(503).json({ message: 'No snapshot available yet' });
-            }
-            return res.json(this.lastSnapshot);
-        });
-
-        app.post('/api/refresh', async (_req, res) => {
-            try {
-                await this.refresh();
-                return res.json({ ok: true, fetchedAt: this.lastSnapshot?.fetchedAt || null });
-            } catch (error) {
-                return res.status(500).json({ ok: false, error: error.message });
-            }
-        });
-
-        const port = Math.max(1024, Number(this.config.webPort) || 8099);
-        this.bridgeServer = app.listen(port, () => {
-            this.log.info(`Bridge webserver listening on port ${port}`);
-        });
-    }
-
-    sanitizePart(part) {
-        return String(part)
-            .replace(/[^a-zA-Z0-9_]/g, '_')
-            .replace(/_+/g, '_')
-            .replace(/^_+|_+$/g, '')
-            .toLowerCase();
-    }
-
-    inferStateCommon(value, path) {
-        if (typeof value === 'number') {
-            const lower = path.toLowerCase();
-            let unit;
-            let role = 'value';
-
-            if (lower.includes('temp')) {
-                unit = '°C';
-                role = 'value.temperature';
-            } else if (lower.includes('humidity')) {
-                unit = '%';
-                role = 'value.humidity';
-            } else if (lower.includes('setpoint') || lower.includes('target')) {
-                unit = '°C';
-                role = 'level.temperature';
-            } else if (lower.includes('valve')) {
-                unit = '%';
-                role = 'value';
-            } else if (lower.includes('battery')) {
-                unit = '%';
-                role = 'value.battery';
-            }
-
-            return { type: 'number', role, unit, read: true, write: false };
-        }
-
-        if (typeof value === 'boolean') {
-            return { type: 'boolean', role: 'indicator', read: true, write: false };
-        }
-
-        return { type: 'string', role: 'text', read: true, write: false };
-    }
-
-    normalizeValue(value) {
-        if (typeof value !== 'string') {
-            return value;
-        }
-
-        const trimmed = value.trim();
-        if (!trimmed) {
-            return '';
-        }
-
-        if (trimmed.toLowerCase() === 'true') {
-            return true;
-        }
-        if (trimmed.toLowerCase() === 'false') {
-            return false;
-        }
-        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-            return Number(trimmed);
-        }
-        return value;
-    }
-
-    findNamedArrayId(item, fallbackIndex) {
-        if (!item || typeof item !== 'object') {
-            return String(fallbackIndex);
-        }
-
-        for (const key of NAMED_ID_CANDIDATES) {
-            if (item[key] !== undefined && item[key] !== null && String(item[key]).trim()) {
-                return String(item[key]);
-            }
-        }
-
-        return String(fallbackIndex);
-    }
-
-    async ensureChannel(channelId, name) {
-        if (!channelId || this.objectCache.has(channelId)) {
-            return;
-        }
-
-        await this.setObjectNotExistsAsync(channelId, {
-            type: 'channel',
-            common: { name: name || channelId.split('.').pop() },
-            native: {},
-        });
-        this.objectCache.add(channelId);
-    }
-
-    async writeLeafState(pathParts, value) {
-        const cleanedParts = pathParts.map(p => this.sanitizePart(p)).filter(Boolean);
-        if (!cleanedParts.length) {
-            return;
-        }
-
-        let running = '';
-        for (let i = 0; i < cleanedParts.length - 1; i++) {
-            running = running ? `${running}.${cleanedParts[i]}` : cleanedParts[i];
-            await this.ensureChannel(running, cleanedParts[i]);
-        }
-
-        const stateId = cleanedParts.join('.');
-        const normalized = this.normalizeValue(value);
-        const stateValue = normalized === null || normalized === undefined
-            ? ''
-            : typeof normalized === 'object'
-                ? JSON.stringify(normalized)
-                : normalized;
-
-        await this.setObjectNotExistsAsync(stateId, {
-            type: 'state',
-            common: {
-                name: cleanedParts[cleanedParts.length - 1],
-                ...this.inferStateCommon(normalized, stateId),
-            },
-            native: {},
-        });
-
-        await this.setStateAsync(stateId, { val: stateValue, ack: true });
-    }
-
-    async flattenToStates(prefix, value) {
-        if (Array.isArray(value)) {
-            for (let i = 0; i < value.length; i++) {
-                const row = value[i];
-                const stablePart = this.findNamedArrayId(row, i);
-                await this.flattenToStates([...prefix, stablePart], row);
-            }
-            return;
-        }
-
-        if (value !== null && typeof value === 'object') {
-            for (const [key, nestedValue] of Object.entries(value)) {
-                await this.flattenToStates([...prefix, key], nestedValue);
-            }
-            return;
-        }
-
-        await this.writeLeafState(prefix, value);
-    }
-
-    parseCustomEndpoints() {
-        if (!this.config.customEndpoints) {
-            return [];
-        }
-
-        return String(this.config.customEndpoints)
-            .split(/[\r\n,;]+/)
-            .map(line => line.trim())
-            .filter(Boolean)
-            .map(line => line.startsWith('/') ? line : `/${line}`);
-    }
-
-    async refresh() {
-        const snapshot = await this.client.fetchSnapshot(this.parseCustomEndpoints());
-        this.lastSnapshot = snapshot;
-
-        await this.setStateAsync('bridge.lastRefresh', snapshot.fetchedAt, true);
-        await this.setStateAsync('info.apiType', 'old', true);
-        await this.setStateAsync('info.baseUrl', snapshot.baseUrl, true);
-
-        for (const [endpoint, payload] of Object.entries(snapshot.endpoints)) {
-            const endpointKey = endpoint
-                .replace(/^\//, '')
-                .split('/')
-                .map(part => this.sanitizePart(part))
-                .filter(Boolean);
-
-            await this.writeLeafState(['endpoints', ...endpointKey, 'ok'], payload.ok);
-            if (!payload.ok) {
-                await this.writeLeafState(['endpoints', ...endpointKey, 'error'], payload.error || 'Unknown error');
-                continue;
-            }
-
-            await this.writeLeafState(['endpoints', ...endpointKey, 'error'], '');
-            await this.flattenToStates(['api', 'old', ...endpointKey], payload.data);
-        }
-
-        if (snapshot.successfulEndpoints > 0) {
-            await this.setStateAsync('info.lastError', '', true);
-            await this.setStateAsync('info.connection', true, true);
-            return;
-        }
-
-        const failed = Object.values(snapshot.endpoints)
-            .filter(p => !p.ok && p.error)
-            .map(p => p.error);
-
-        const message = failed.length
-            ? `No compatible endpoint found: ${failed[0]}`
-            : 'No compatible endpoint found (all configured/default endpoints failed)';
-
-        await this.setStateAsync('info.connection', false, true);
-        await this.setStateAsync('info.lastError', message, true);
+        this.log.info(`Verbinde mit Roth Touchline unter ${host}`);
+        await this.detectAndConnect(host);
     }
 
     async onUnload(callback) {
         try {
-            if (this.pollTimer) {
-                clearInterval(this.pollTimer);
-                this.pollTimer = null;
-            }
-
-            if (this.bridgeServer) {
-                this.bridgeServer.close();
-                this.bridgeServer = null;
-            }
-
-            await this.setStateAsync('info.connection', false, true);
-            await this.setStateAsync('info.lastError', '', true);
-            await this.setStateAsync('info.baseUrl', '', true);
+            this.stopPolling();
+            this.setConnected(false);
             callback();
-        } catch (error) {
-            callback(error);
+        } catch {
+            callback();
         }
+    }
+
+    // ─────────────────────────────────────────────
+    // API-Erkennung
+    // ─────────────────────────────────────────────
+
+    async detectAndConnect(host) {
+        const timeout = this.config.requestTimeout || 5000;
+        const preferred = this.config.apiVersion || 'auto';
+
+        if (preferred === 'sl') {
+            if (await this.tryConnectSL(host, timeout)) return;
+            this.log.warn('SL-API nicht erreichbar, versuche Legacy …');
+            await this.tryConnectLegacy(host, timeout);
+        } else if (preferred === 'legacy') {
+            if (await this.tryConnectLegacy(host, timeout)) return;
+            this.log.warn('Legacy-API nicht erreichbar, versuche SL …');
+            await this.tryConnectSL(host, timeout);
+        } else {
+            // auto: SL zuerst, dann Legacy
+            if (await this.tryConnectSL(host, timeout)) return;
+            if (await this.tryConnectLegacy(host, timeout)) return;
+            this.log.error('Keine API-Version erreichbar. Überprüfe IP-Adresse und Netzwerkverbindung.');
+        }
+    }
+
+    async tryConnectSL(host, timeout) {
+        try {
+            const api = new TouchlineSLAPI(host, timeout);
+            await api.getModuleInfo(); // Verbindungstest
+            this.api = api;
+            this.apiType = 'sl';
+            this.log.info('Verbunden via Touchline SL REST-API');
+            this.setConnected(true);
+            await this.initObjectsSL();
+            this.startPolling();
+            return true;
+        } catch (e) {
+            this.log.debug(`SL-API nicht verfügbar: ${e.message}`);
+            return false;
+        }
+    }
+
+    async tryConnectLegacy(host, timeout) {
+        try {
+            const api = new TouchlineLegacyAPI(host, timeout);
+            await api.getZoneCount(); // Verbindungstest
+            this.api = api;
+            this.apiType = 'legacy';
+            this.log.info('Verbunden via Touchline Legacy CGI-API');
+            this.setConnected(true);
+            await this.initObjectsLegacy();
+            this.startPolling();
+            return true;
+        } catch (e) {
+            this.log.debug(`Legacy-API nicht verfügbar: ${e.message}`);
+            return false;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Objekt-Initialisierung SL
+    // ─────────────────────────────────────────────
+
+    async initObjectsSL() {
+        const info = await this.api.getModuleInfo();
+        await this.setObjectNotExistsAsync('system', {
+            type: 'channel',
+            common: { name: 'System Information' },
+            native: {},
+        });
+        await this.createStateIfNotExists('system.firmware',    'Firmware',      'string', 'text',            false);
+        await this.createStateIfNotExists('system.serialNumber','Seriennummer',  'string', 'text',            false);
+        await this.createStateIfNotExists('system.model',       'Modell',        'string', 'text',            false);
+        await this.createStateIfNotExists('system.ipAddress',   'IP-Adresse',    'string', 'text',            false);
+        await this.createStateIfNotExists('system.apiVersion',  'API-Version',   'string', 'text',            false);
+
+        await this.setStateAsync('system.firmware',    String(info.firmware || info.firmwareVersion || ''), true);
+        await this.setStateAsync('system.serialNumber',String(info.serialNumber || info.serial || ''),      true);
+        await this.setStateAsync('system.model',       String(info.model || ''),                            true);
+        await this.setStateAsync('system.ipAddress',   String(info.ipAddress || this.config.host),          true);
+        await this.setStateAsync('system.apiVersion',  'SL',                                                true);
+
+        // Zonen anlegen
+        const zones = await this.api.getAllZones();
+        for (const zone of zones) {
+            await this.createZoneObjects(String(zone.id), zone.name);
+        }
+
+        // Zeitpläne
+        const schedules = await this.api.getSchedules();
+        for (const sched of (Array.isArray(schedules) ? schedules : [])) {
+            await this.createScheduleObjects(sched);
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Objekt-Initialisierung Legacy
+    // ─────────────────────────────────────────────
+
+    async initObjectsLegacy() {
+        const info = await this.api.getSystemInfo();
+        await this.setObjectNotExistsAsync('system', {
+            type: 'channel',
+            common: { name: 'System Information' },
+            native: {},
+        });
+        await this.createStateIfNotExists('system.firmware',    'Firmware',     'string', 'text', false);
+        await this.createStateIfNotExists('system.serialNumber','Seriennummer', 'string', 'text', false);
+        await this.createStateIfNotExists('system.apiVersion',  'API-Version',  'string', 'text', false);
+
+        await this.setStateAsync('system.firmware',    String(info.firmwareVersion || ''), true);
+        await this.setStateAsync('system.serialNumber',String(info.serialNumber || ''),    true);
+        await this.setStateAsync('system.apiVersion',  'Legacy',                           true);
+
+        const count = await this.api.getZoneCount();
+        this.log.info(`${count} Zone(n) gefunden`);
+
+        const zones = await this.api.getAllZones(count);
+        for (const zone of zones) {
+            await this.createZoneObjects(String(zone.id), zone.name);
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Gemeinsame Zonenstruktur
+    // ─────────────────────────────────────────────
+
+    async createZoneObjects(id, name) {
+        const base = `zones.${id}`;
+        await this.setObjectNotExistsAsync(base, {
+            type: 'channel',
+            common: { name },
+            native: {},
+        });
+
+        const states = [
+            // id,                       Name,                   Typ,     Rolle,                         Schreiben
+            ['name',                     'Name',                 'string','text',                        false],
+            ['currentTemperature',       'Isttemperatur',        'number','value.temperature',            false],
+            ['targetTemperature',        'Solltemperatur',       'number','level.temperature',            true],
+            ['floorTemperature',         'Fußbodentemperatur',   'number','value.temperature',            false],
+            ['humidity',                 'Luftfeuchtigkeit',     'number','value.humidity',               false],
+            ['co2',                      'CO₂',                  'number','value.co2',                    false],
+            ['mode',                     'Modus (Text)',         'string','text',                         false],
+            ['modeRaw',                  'Modus (Zahl)',         'number','value',                        true],
+            ['windowContact',            'Fensterkontakt',       'boolean','sensor.window',               false],
+            ['valvePosition',            'Ventilstellung %',     'number','value',                        false],
+            ['weekSchedule',             'Wochenprogramm-ID',    'number','value',                        true],
+            ['online',                   'Online',               'boolean','indicator.reachable',         false],
+        ];
+
+        for (const [sid, sname, stype, srole, swrite] of states) {
+            await this.createStateIfNotExists(`${base}.${sid}`, sname, stype, srole, swrite);
+        }
+    }
+
+    async createScheduleObjects(sched) {
+        const base = `schedules.${sched.id}`;
+        await this.setObjectNotExistsAsync(base, {
+            type: 'channel',
+            common: { name: sched.name || `Schedule ${sched.id}` },
+            native: {},
+        });
+        await this.createStateIfNotExists(`${base}.name`, 'Name', 'string', 'text', false);
+        await this.createStateIfNotExists(`${base}.json`, 'JSON', 'string', 'json', false);
+        await this.setStateAsync(`${base}.name`, String(sched.name || ''), true);
+        await this.setStateAsync(`${base}.json`, JSON.stringify(sched), true);
+    }
+
+    // ─────────────────────────────────────────────
+    // Polling
+    // ─────────────────────────────────────────────
+
+    startPolling() {
+        const interval = (this.config.pollInterval || 30) * 1000;
+        this.log.info(`Starte Polling alle ${this.config.pollInterval || 30} Sekunden`);
+        this.poll(); // Sofortiger erster Abruf
+        this.pollTimer = setInterval(() => this.poll(), interval);
+    }
+
+    stopPolling() {
+        if (this.pollTimer) {
+            clearInterval(this.pollTimer);
+            this.pollTimer = null;
+        }
+    }
+
+    async poll() {
+        try {
+            if (this.apiType === 'sl') {
+                await this.pollSL();
+            } else if (this.apiType === 'legacy') {
+                await this.pollLegacy();
+            }
+            if (!this.connected) this.setConnected(true);
+        } catch (e) {
+            this.log.warn(`Polling-Fehler: ${e.message}`);
+            this.setConnected(false);
+        }
+    }
+
+    async pollSL() {
+        const zones = await this.api.getAllZones();
+        for (const zone of zones) {
+            await this.updateZoneStates(String(zone.id), zone);
+        }
+    }
+
+    async pollLegacy() {
+        const count = await this.api.getZoneCount();
+        const zones = await this.api.getAllZones(count);
+        for (const zone of zones) {
+            await this.updateZoneStates(String(zone.id), zone);
+        }
+    }
+
+    async updateZoneStates(id, zone) {
+        const base = `zones.${id}`;
+        const updates = {
+            name:               zone.name,
+            currentTemperature: zone.currentTemperature,
+            targetTemperature:  zone.targetTemperature,
+            floorTemperature:   zone.floorTemperature,
+            humidity:           zone.humidity,
+            co2:                zone.co2,
+            mode:               zone.mode,
+            modeRaw:            zone.modeRaw,
+            windowContact:      zone.windowContact,
+            valvePosition:      zone.valvePosition,
+            weekSchedule:       zone.weekSchedule,
+            online:             zone.online !== false,
+        };
+
+        for (const [key, val] of Object.entries(updates)) {
+            if (val !== null && val !== undefined) {
+                await this.setStateAsync(`${base}.${key}`, val, true);
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Steuerbefehle (State-Änderungen)
+    // ─────────────────────────────────────────────
+
+    async onStateChange(id, state) {
+        if (!state || state.ack) return; // Nur eigene Schreibzugriffe
+
+        const parts = id.split('.');
+        // Format: touchline.0.zones.<id>.<key>
+        if (parts[2] !== 'zones') return;
+
+        const zoneId = parts[3];
+        const key    = parts[4];
+
+        try {
+            if (key === 'targetTemperature') {
+                this.log.info(`Zone ${zoneId}: Solltemperatur → ${state.val}°C`);
+                await this.api.setTargetTemperature(
+                    this.apiType === 'legacy' ? parseInt(zoneId) : zoneId,
+                    state.val
+                );
+                await this.setStateAsync(id, state.val, true);
+            } else if (key === 'modeRaw') {
+                this.log.info(`Zone ${zoneId}: Modus → ${state.val}`);
+                await this.api.setMode(
+                    this.apiType === 'legacy' ? parseInt(zoneId) : zoneId,
+                    state.val
+                );
+                await this.setStateAsync(id, state.val, true);
+            } else if (key === 'weekSchedule' && this.apiType === 'sl') {
+                this.log.info(`Zone ${zoneId}: Wochenprogramm → ${state.val}`);
+                await this.api.assignSchedule(zoneId, state.val);
+                await this.setStateAsync(id, state.val, true);
+            }
+        } catch (e) {
+            this.log.error(`Steuerbefehl fehlgeschlagen (${key}): ${e.message}`);
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Message-Handler (für Admin-UI Tests)
+    // ─────────────────────────────────────────────
+
+    async onMessage(obj) {
+        if (!obj || !obj.command) return;
+
+        if (obj.command === 'testConnection') {
+            const host = (obj.message?.host || '').trim();
+            if (!host) {
+                this.sendTo(obj.from, obj.command, { error: 'Keine IP angegeben' }, obj.callback);
+                return;
+            }
+            try {
+                const sl = new TouchlineSLAPI(host, 3000);
+                await sl.getModuleInfo();
+                this.sendTo(obj.from, obj.command, { result: 'ok', type: 'sl' }, obj.callback);
+            } catch {
+                try {
+                    const leg = new TouchlineLegacyAPI(host, 3000);
+                    const count = await leg.getZoneCount();
+                    this.sendTo(obj.from, obj.command,
+                        { result: 'ok', type: 'legacy', zones: count }, obj.callback);
+                } catch (e) {
+                    this.sendTo(obj.from, obj.command,
+                        { error: `Nicht erreichbar: ${e.message}` }, obj.callback);
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Hilfsfunktionen
+    // ─────────────────────────────────────────────
+
+    setConnected(val) {
+        this.connected = val;
+        this.setState('info.connection', val, true);
+    }
+
+    async createStateIfNotExists(id, name, type, role, write, unit) {
+        const common = { name, type, role, read: true, write: !!write };
+        if (unit) common.unit = unit;
+        await this.setObjectNotExistsAsync(id, { type: 'state', common, native: {} });
     }
 }
 
+// Adapter starten
 if (require.main !== module) {
-    module.exports = options => new TouchlineAdapter(options);
+    module.exports = (options) => new TouchlineAdapter(options);
 } else {
-    // @ts-expect-error
     new TouchlineAdapter();
 }
