@@ -1,58 +1,45 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <link rel="stylesheet" href="../../css/adapter.css"/>
-    <link rel="stylesheet" href="../../lib/css/materialize.css"/>
-    
-    <script src="../../lib/js/jquery-3.2.1.min.js"></script>
-    <script src="../../lib/js/materialize.js"></script>
-    
-    <script src="../../js/adapter-settings.js"></script>
-    <script src="words.js"></script>
+
+<meta charset="utf-8">
+
+<link rel="stylesheet" href="../../css/adapter.css"/>
+<link rel="stylesheet" href="../../lib/css/materialize.css"/>
+
+<script src="../../lib/js/jquery-3.2.1.min.js"></script>
+<script src="../../lib/js/materialize.js"></script>
+
+<script src="../../js/adapter-settings.js"></script>
+<script src="words.js"></script>
+
 </head>
 
 <body>
 
 <div class="m adapter-container">
 
-    <div class="row">
-        <div class="col s12">
-            <h5>Roth Touchline Einstellungen</h5>
-        </div>
-    </div>
+<div class="row">
 
-    <div class="row">
+<div class="col s12">
+<h5>Touchline Einstellungen</h5>
+</div>
 
-        <div class="input-field col s6">
-            <input id="host" class="value" type="text"/>
-            <label for="host">IP-Adresse Controller</label>
-        </div>
+</div>
 
-        <div class="input-field col s6">
-            <select id="apiVersion" class="value">
-                <option value="auto">Auto</option>
-                <option value="sl">Touchline SL</option>
-                <option value="legacy">Touchline Legacy</option>
-            </select>
-            <label>API Version</label>
-        </div>
+<div class="row">
 
-    </div>
+<div class="input-field col s6">
+<input id="host" class="value" type="text">
+<label for="host">Controller IP</label>
+</div>
 
-    <div class="row">
+<div class="input-field col s6">
+<input id="pollInterval" class="value" type="number">
+<label for="pollInterval">Polling (Sekunden)</label>
+</div>
 
-        <div class="input-field col s6">
-            <input id="pollInterval" class="value" type="number"/>
-            <label for="pollInterval">Polling Intervall (Sek)</label>
-        </div>
-
-        <div class="input-field col s6">
-            <input id="requestTimeout" class="value" type="number"/>
-            <label for="requestTimeout">Timeout (ms)</label>
-        </div>
-
-    </div>
+</div>
 
 </div>
 
@@ -63,11 +50,7 @@ function load(settings, onChange) {
     if (!settings) return;
 
     $('#host').val(settings.host);
-    $('#apiVersion').val(settings.apiVersion || "auto");
     $('#pollInterval').val(settings.pollInterval || 30);
-    $('#requestTimeout').val(settings.requestTimeout || 5000);
-
-    $('select').formSelect();
 
     onChange(false);
 }
@@ -77,9 +60,7 @@ function save(callback) {
     const obj = {};
 
     obj.host = $('#host').val();
-    obj.apiVersion = $('#apiVersion').val();
     obj.pollInterval = parseInt($('#pollInterval').val()) || 30;
-    obj.requestTimeout = parseInt($('#requestTimeout').val()) || 5000;
 
     callback(obj);
 }
