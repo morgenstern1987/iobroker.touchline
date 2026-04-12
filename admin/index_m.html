@@ -21,20 +21,20 @@
 
 <div class="row">
 <div class="col s12">
-<h5>Touchline Adapter</h5>
+<h5>Touchline Einstellungen</h5>
 </div>
 </div>
 
 <div class="row">
 
 <div class="input-field col s6">
-<input id="host" type="text" class="value">
+<input id="host" class="value" type="text"/>
 <label for="host">Controller IP</label>
 </div>
 
 <div class="input-field col s6">
-<input id="pollInterval" type="number" class="value">
-<label for="pollInterval">Polling (Sek)</label>
+<input id="pollInterval" class="value" type="number"/>
+<label for="pollInterval">Polling Intervall</label>
 </div>
 
 </div>
@@ -61,12 +61,10 @@ function load(settings, onChange) {
 
 function save(callback) {
 
-    const obj = {};
-
-    obj.host = $('#host').val();
-    obj.pollInterval = parseInt($('#pollInterval').val()) || 30;
-
-    callback(obj);
+    callback({
+        host: $('#host').val(),
+        pollInterval: parseInt($('#pollInterval').val()) || 30
+    });
 }
 
 </script>
