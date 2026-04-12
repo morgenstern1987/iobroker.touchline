@@ -3,21 +3,16 @@
     "name": "touchline",
     "version": "0.1.0",
     "title": "Roth Touchline Adapter",
-    "titleLang": {
-      "en": "Roth Touchline Adapter",
-      "de": "Roth Touchline Adapter"
-    },
     "desc": {
-      "en": "Adapter for Roth Touchline floor heating controller",
-      "de": "Adapter für Roth Touchline Fußbodenheizung"
+      "en": "Adapter for Roth Touchline heating controller",
+      "de": "Adapter für Roth Touchline Heizungssteuerung"
     },
     "authors": [
       "Henrik Morgenstern"
     ],
     "keywords": [
-      "heating",
       "touchline",
-      "floor heating"
+      "heating"
     ],
     "license": "MIT",
     "platform": "Javascript/Node.js",
@@ -30,11 +25,7 @@
     },
     "connectionType": "local",
     "dataSource": "poll",
-    "loglevel": "info",
-    "icon": "touchline.png",
-    "extIcon": "https://raw.githubusercontent.com/morgenstern1987/iobroker.touchline/main/admin/touchline.png",
-    "readme": "https://github.com/morgenstern1987/iobroker.touchline",
-    "compact": true
+    "loglevel": "info"
   },
 
   "native": {
@@ -46,18 +37,10 @@
 
   "instanceObjects": [
     {
-      "_id": "info",
-      "type": "channel",
-      "common": {
-        "name": "Information"
-      },
-      "native": {}
-    },
-    {
       "_id": "info.connection",
       "type": "state",
       "common": {
-        "name": "Connected",
+        "name": "Connection",
         "type": "boolean",
         "role": "indicator.connected",
         "read": true,
