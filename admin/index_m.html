@@ -1,0 +1,37 @@
+<html>
+<head>
+<script src="../lib/js/jquery-3.2.1.min.js"></script>
+</head>
+
+<body>
+
+<h2>Touchline Adapter</h2>
+
+<label>Controller IP</label>
+<input id="ip"/>
+
+<label>Polling Interval</label>
+<input id="interval"/>
+
+<script>
+
+function load(settings){
+
+    $("#ip").val(settings.ip);
+    $("#interval").val(settings.interval);
+
+}
+
+function save(callback){
+
+    callback({
+        ip: $("#ip").val(),
+        interval: parseInt($("#interval").val())
+    });
+
+}
+
+</script>
+
+</body>
+</html>
