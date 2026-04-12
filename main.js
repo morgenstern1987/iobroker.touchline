@@ -1,63 +1,40 @@
 const utils = require("@iobroker/adapter-core");
-const Touchline = require("./lib/touchline");
 
-class TouchlineAdapter extends utils.Adapter {
+class Touchline extends utils.Adapter {
 
-    constructor(options){
-        super({...options,name:"touchline"});
+    constructor(options = {}) {
+        super({
+            ...options,
+            name: "touchline"
+        });
+
+        this.on("ready", this.onReady.bind(this));
     }
 
-    async onReady(){
+    async onReady() {
 
-        this.client = new Touchline(this.config.ip);
+        this.log.info("Touchline adapter started");
 
-        this.poll();
+        await this.setObjectNotExistsAsync("info.connection", {
+            type: "state",
+            common: {
+                name: "Connection",
+                type: "boolean",
+                role: "indicator.connected",
+                read: true,
+                write: false
+            },
+            native: {}
+        });
 
-        setInterval(()=>{
-            this.poll();
-        },this.config.interval*1000);
-
-    }
-
-    async poll(){
-
-        const zones = await this.client.getZones();
-
-        for(const z of zones){
-
-            const base = "rooms."+z.id;
-
-            await this.setObjectNotExistsAsync(base,{
-                type:"channel",
-                common:{name:z.name},
-                native:{}
-            });
-
-            await this.setObjectNotExistsAsync(base+".temperature",{
-                type:"state",
-                common:{
-                    type:"number",
-                    role:"value.temperature",
-                    unit:"°C",
-                    read:true,
-                    write:false
-                },
-                native:{}
-            });
-
-            await this.setStateAsync(
-                base+".temperature",
-                {val:z.temperature,ack:true}
-            );
-
-        }
+        this.setState("info.connection", true, true);
 
     }
 
 }
 
-if(module.parent){
-    module.exports=(options)=>new TouchlineAdapter(options);
-}else{
-    new TouchlineAdapter();
+if (require.main !== module) {
+    module.exports = (options) => new Touchline(options);
+} else {
+    new Touchline();
 }
