@@ -1,0 +1,18 @@
+{
+  "type": "panel",
+  "items": {
+    "ip": {
+      "type": "text",
+      "label": "Touchline Controller IP",
+      "help": "IP-Adresse des Roth Touchline Controllers",
+      "default": "192.168.10.52"
+    },
+    "interval": {
+      "type": "number",
+      "label": "Polling Interval (Sekunden)",
+      "min": 5,
+      "max": 300,
+      "default": 60
+    }
+  }
+}
