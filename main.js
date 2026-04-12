@@ -1,62 +1,119 @@
 'use strict';
 
 const utils = require('@iobroker/adapter-core');
-const discoverTouchline = require('./lib/discovery');
+const LegacyAPI = require('./lib/legacy-api');
 
 class TouchlineAdapter extends utils.Adapter {
 
     constructor(options = {}) {
 
-        super({
-            ...options,
-            name: 'touchline'
-        });
+        super({ ...options, name: 'touchline' });
+
+        this.api = null;
 
         this.on('ready', this.onReady.bind(this));
-        this.on('unload', this.onUnload.bind(this));
+        this.on('stateChange', this.onStateChange.bind(this));
     }
 
     async onReady() {
 
         await this.setStateAsync('info.connection', false, true);
 
-        let host = this.config.host;
+        const host = this.config.host;
 
         if (!host) {
 
-            this.log.info('Keine IP konfiguriert → starte Discovery');
+            this.log.error('Keine IP gesetzt');
 
-            const devices = await discoverTouchline(this);
-
-            if (devices.length > 0) {
-
-                host = devices[0].ip;
-
-                this.log.info(`Controller gefunden: ${host}`);
-
-            } else {
-
-                this.log.error('Kein Touchline Controller gefunden');
-                return;
-            }
+            return;
         }
 
-        this.log.info(`Verbinde mit Controller ${host}`);
+        this.api = new LegacyAPI(host);
 
-        await this.setStateAsync('info.connection', true, true);
+        const zones = await this.api.getZoneCount();
+
+        this.log.info(`Gefundene Räume: ${zones}`);
+
+        for (let i = 0; i < zones; i++) {
+
+            const id = `zones.zone${i}`;
+
+            await this.setObjectNotExistsAsync(id, {
+                type: 'channel',
+                common: { name: `Zone ${i}` },
+                native: {}
+            });
+
+            await this.createState(`${id}.currentTemp`, 'Ist Temperatur', false);
+            await this.createState(`${id}.targetTemp`, 'Soll Temperatur', true);
+        }
+
+        this.poll();
+
+        setInterval(() => this.poll(), (this.config.pollInterval || 30) * 1000);
     }
 
-    async onUnload(callback) {
+    async createState(id, name, write) {
+
+        await this.setObjectNotExistsAsync(id, {
+            type: 'state',
+            common: {
+                name,
+                type: 'number',
+                read: true,
+                write
+            },
+            native: {}
+        });
+    }
+
+    async poll() {
 
         try {
 
+            const count = await this.api.getZoneCount();
+
+            for (let i = 0; i < count; i++) {
+
+                const regs = await this.api.getRegisters([
+                    10000 + i * 6,
+                    10000 + i * 6 + 1
+                ]);
+
+                const current = regs[10000 + i * 6 + 1] / 10;
+                const target = regs[10000 + i * 6] / 10;
+
+                await this.setStateAsync(`zones.zone${i}.currentTemp`, current, true);
+                await this.setStateAsync(`zones.zone${i}.targetTemp`, target, true);
+            }
+
+            await this.setStateAsync('info.connection', true, true);
+
+        } catch (e) {
+
+            this.log.error(e);
+
             await this.setStateAsync('info.connection', false, true);
+        }
+    }
 
-            callback();
+    async onStateChange(id, state) {
 
-        } catch {
+        if (!state || state.ack) return;
 
-            callback();
+        const parts = id.split('.');
+
+        if (parts[2] !== 'zones') return;
+
+        const zone = parseInt(parts[3].replace('zone',''));
+
+        if (parts[4] === 'targetTemp') {
+
+            const reg = 10000 + zone * 6;
+
+            const value = Math.round(state.val * 10);
+
+            await this.api.getRegisters([`${reg}=${value}`]);
         }
     }
 }
