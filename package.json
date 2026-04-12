@@ -1,39 +1,12 @@
 {
   "name": "iobroker.touchline",
   "version": "0.1.0",
-  "description": "ioBroker adapter for Roth Touchline / Touchline SL floor heating controllers",
-  "author": {
-    "name": "morgenstern1987",
-    "email": "morgenstern1987@github"
-  },
-  "homepage": "[github.com](https://github.com/morgenstern1987/iobroker.touchline)",
+  "description": "ioBroker adapter for Roth Touchline heating controller",
+  "author": "Henrik Morgenstern",
   "license": "MIT",
-  "keywords": [
-    "ioBroker",
-    "roth",
-    "touchline",
-    "heating",
-    "floor heating"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "[github.com](https://github.com/morgenstern1987/iobroker.touchline.git)"
-  },
-  "dependencies": {
-    "@iobroker/adapter-core": "^3.0.0",
-    "axios": "^1.6.0",
-    "xml2js": "^0.6.0"
-  },
-  "devDependencies": {
-    "@iobroker/testing": "^4.0.0",
-    "eslint": "^8.0.0"
-  },
   "main": "main.js",
-  "scripts": {
-    "test": "mocha --timeout 10000 test/**/*.js",
-    "lint": "eslint main.js lib/**/*.js"
-  },
-  "engines": {
-    "node": ">=16.0.0"
+  "dependencies": {
+    "@iobroker/adapter-core": "^3.2.3",
+    "axios": "^1.6.7"
   }
 }
