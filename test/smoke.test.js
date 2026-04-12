@@ -17,6 +17,12 @@ test('protocol defaults to http and supports https', () => {
     assert.equal(c2.protocol, 'https');
 });
 
+
+test('buildBaseUrl uses configured port when host has no explicit port', () => {
+    const client = new TouchlineClient({ host: '192.168.1.10', port: 8899 });
+    assert.equal(client.buildBaseUrl(), 'http://192.168.1.10:8899');
+});
+
 test('auto mode chooses api generation with more successful endpoints', async () => {
     const client = new TouchlineClient({ host: '127.0.0.1' });
     client.request = async path => {

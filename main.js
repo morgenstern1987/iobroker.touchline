@@ -37,7 +37,11 @@ class TouchlineAdapter extends utils.Adapter {
             password: this.config.password,
             token: this.config.token,
             protocol: this.config.protocol || 'http',
+            port: this.config.apiPort || 80,
+            requestTimeout: this.config.requestTimeout || 5000,
         });
+
+        this.log.info(`Touchline target: ${this.config.protocol || 'http'}://${this.config.localIp.trim()}:${this.config.apiPort || 80}`);
 
         if (this.config.enableWebServer) {
             this.startBridgeServer();
@@ -258,7 +262,7 @@ class TouchlineAdapter extends utils.Adapter {
         }
 
         return String(this.config.customEndpoints)
-            .split(/\r?\n/)
+            .split(/[\r\n,;]+/)
             .map(line => line.trim())
             .filter(Boolean)
             .map(line => line.startsWith('/') ? line : `/${line}`);
@@ -297,8 +301,11 @@ class TouchlineAdapter extends utils.Adapter {
             return;
         }
 
+        const failed = Object.values(snapshot.endpoints).filter(p => !p.ok && p.error).map(p => p.error);
+        const msg = failed.length ? `No compatible endpoint found: ${failed[0]}` : 'No compatible endpoint found (all configured/default endpoints failed)';
+
         await this.setStateAsync('info.connection', false, true);
-        await this.setStateAsync('info.lastError', 'No compatible endpoint found (all configured/default endpoints failed)', true);
+        await this.setStateAsync('info.lastError', msg, true);
     }
 
     async onUnload(callback) {

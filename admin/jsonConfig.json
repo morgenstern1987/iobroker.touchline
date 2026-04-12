@@ -11,6 +11,20 @@
           "label": "Local IP / Hostname of Touchline controller",
           "help": "Example: 192.168.1.20"
         },
+        "apiPort": {
+          "type": "number",
+          "label": "Touchline API port",
+          "min": 1,
+          "max": 65535,
+          "default": 80
+        },
+        "requestTimeout": {
+          "type": "number",
+          "label": "HTTP timeout (ms)",
+          "min": 1000,
+          "max": 60000,
+          "default": 5000
+        },
         "protocol": {
           "type": "select",
           "label": "Protocol",
@@ -63,10 +77,9 @@
           "label": "Bearer token (optional)"
         },
         "customEndpoints": {
-          "type": "textarea",
+          "type": "text",
           "label": "Additional API paths (one per line)",
-          "rows": 6,
-          "help": "Example: /api/v1/weather"
+          "help": "Example: /api/v1/weather,/api/v1/home"
         }
       }
     },

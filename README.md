@@ -13,7 +13,7 @@ Der Adapter pollt den Touchline-Controller, legt daraus möglichst viele Datenpu
 - Polling in einstellbarem Intervall
 - Rekursives Mapping in möglichst viele ioBroker-Datenpunkte
 - Stabilere IDs bei Arrays (z. B. nach `id`, `uuid`, `name`)
-- Zusätzliche API-Pfade frei konfigurierbar (ein Pfad pro Zeile)
+- Zusätzliche API-Pfade frei konfigurierbar (Komma, Semikolon oder Zeilenumbruch)
 - Optionaler Bridge-Webserver
   - `GET /health`
   - `GET /api/states`
@@ -23,10 +23,12 @@ Der Adapter pollt den Touchline-Controller, legt daraus möglichst viele Datenpu
 
 - `Local IP / Hostname of Touchline controller`
 - `Protocol` (`HTTP`, `HTTPS`)
+- `Touchline API port` (Standard: `80`, z. B. `8899`)
+- `HTTP timeout (ms)`
 - `Touchline API generation` (`Auto`, `New`, `Legacy`)
 - `Polling interval (seconds)`
 - optional `Username` / `Password` oder `Bearer token`
-- `Additional API paths (one per line)`
+- `Additional API paths` (getrennt durch Komma, Semikolon oder Zeilenumbruch)
 - `Enable local bridge webserver`
 - `Webserver port`
 
@@ -49,7 +51,7 @@ npm test
 
 GitHub Actions führt bei Push/PR automatisch aus:
 
-- `npm ci`
+- `npm install`
 - `npm run lint`
 - `npm run check`
 
@@ -67,6 +69,7 @@ Wenn `info.connection = false` und keine API-Daten unter `api.*` erscheinen:
 
 - prüfe `info.lastError`
 - setze ggf. `Touchline API generation` explizit auf `New` oder `Legacy`
-- ergänze unter `Additional API paths` bekannte Endpunkte deiner Firmware
+- ergänze unter `Additional API paths` bekannte Endpunkte deiner Firmware (z. B. `/api/v1/weather,/api/v1/home`)
+- bei `ETIMEDOUT` prüfe IP/Port (z. B. 80 vs. 8899) und Firewall im lokalen Netz
 
 Der Adapter markiert nur dann `info.connection = true`, wenn mindestens ein Endpoint erfolgreich gelesen wurde.

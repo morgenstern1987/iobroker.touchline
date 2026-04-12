@@ -70,7 +70,9 @@
     "username": "",
     "password": "",
     "token": "",
-    "customEndpoints": ""
+    "customEndpoints": "",
+    "apiPort": 80,
+    "requestTimeout": 5000
   },
   "objects": [],
   "instanceObjects": [
