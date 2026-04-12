@@ -3,6 +3,7 @@
 const utils = require('@iobroker/adapter-core');
 const TouchlineLegacyAPI = require('./lib/api-legacy');
 const TouchlineSLAPI = require('./lib/api-sl');
+const discoverTouchline = require('./lib/discovery');
 
 class TouchlineAdapter extends utils.Adapter {
 
@@ -16,7 +17,6 @@ class TouchlineAdapter extends utils.Adapter {
         this.api = null;
         this.apiType = null;
         this.pollTimer = null;
-        this.connected = false;
 
         this.on('ready', this.onReady.bind(this));
         this.on('stateChange', this.onStateChange.bind(this));
@@ -24,11 +24,34 @@ class TouchlineAdapter extends utils.Adapter {
         this.on('unload', this.onUnload.bind(this));
     }
 
-    // ─────────────────────────────────────────────
-    // Adapter start
-    // ─────────────────────────────────────────────
-
     async onReady() {
+
+        await this.createInfoObjects();
+
+        let host = (this.config.host || '').trim();
+
+        if (!host) {
+
+            this.log.info('Keine IP konfiguriert → automatische Suche');
+
+            const devices = await discoverTouchline(this);
+
+            if (devices.length === 0) {
+
+                this.log.error('Kein Touchline Controller gefunden');
+
+                return;
+            }
+
+            host = devices[0].ip;
+
+            this.log.info(`Controller automatisch gefunden: ${host}`);
+        }
+
+        await this.connectController(host);
+    }
+
+    async createInfoObjects() {
 
         await this.setObjectNotExistsAsync('info', {
             type: 'channel',
@@ -43,62 +66,28 @@ class TouchlineAdapter extends utils.Adapter {
                 type: 'boolean',
                 role: 'indicator.connected',
                 read: true,
-                write: false,
-                def: false
+                write: false
             },
             native: {}
         });
 
         await this.setStateAsync('info.connection', false, true);
-
-        const host = (this.config.host || '').trim();
-
-        if (!host) {
-            this.log.error('Keine IP-Adresse konfiguriert.');
-            return;
-        }
-
-        this.log.info(`Verbinde mit Touchline Controller ${host}`);
-
-        await this.detectAndConnect(host);
     }
 
-    async onUnload(callback) {
+    async connectController(host) {
 
         try {
 
-            if (this.pollTimer) clearInterval(this.pollTimer);
-
-            await this.setStateAsync('info.connection', false, true);
-
-            callback();
-
-        } catch {
-
-            callback();
-        }
-    }
-
-    // ─────────────────────────────────────────────
-    // API Detection
-    // ─────────────────────────────────────────────
-
-    async detectAndConnect(host) {
-
-        const timeout = this.config.requestTimeout || 5000;
-
-        try {
-
-            const api = new TouchlineSLAPI(host, timeout);
+            const api = new TouchlineSLAPI(host);
 
             await api.getModuleInfo();
 
             this.api = api;
             this.apiType = 'sl';
 
-            this.log.info('Touchline SL API erkannt');
+            this.log.info('Touchline SL erkannt');
 
-            await this.initObjectsSL();
+            await this.initializeZones();
 
             this.startPolling();
 
@@ -108,71 +97,62 @@ class TouchlineAdapter extends utils.Adapter {
 
         try {
 
-            const api = new TouchlineLegacyAPI(host, timeout);
+            const api = new TouchlineLegacyAPI(host);
 
             await api.getZoneCount();
 
             this.api = api;
             this.apiType = 'legacy';
 
-            this.log.info('Touchline Legacy API erkannt');
+            this.log.info('Touchline Legacy erkannt');
 
-            await this.initObjectsLegacy();
+            await this.initializeZones();
 
             this.startPolling();
 
-            return;
-
         } catch (e) {
 
-            this.log.error(`Keine API erreichbar: ${e.message}`);
+            this.log.error(`Controller nicht erreichbar: ${e.message}`);
         }
     }
 
-    // ─────────────────────────────────────────────
-    // Objekt Initialisierung SL
-    // ─────────────────────────────────────────────
+    async initializeZones() {
 
-    async initObjectsSL() {
+        let zones;
 
-        const zones = await this.api.getAllZones();
+        if (this.apiType === 'sl') {
+
+            zones = await this.api.getAllZones();
+
+        } else {
+
+            const count = await this.api.getZoneCount();
+
+            zones = await this.api.getAllZones(count);
+        }
 
         for (const zone of zones) {
 
-            await this.createZone(zone.id, zone.name);
+            const zoneName = zone.name || `Zone ${zone.id}`;
+
+            const safeName = zoneName
+                .toLowerCase()
+                .replace(/\s+/g, '_')
+                .replace(/[^a-z0-9_]/g, '');
+
+            const base = `zones.${safeName}`;
+
+            await this.setObjectNotExistsAsync(base, {
+                type: 'channel',
+                common: { name: zoneName },
+                native: { id: zone.id }
+            });
+
+            await this.createState(`${base}.currentTemperature`, 'Ist Temperatur', false);
+            await this.createState(`${base}.targetTemperature`, 'Soll Temperatur', true);
+            await this.createState(`${base}.humidity`, 'Luftfeuchte', false);
+            await this.createState(`${base}.modeRaw`, 'Modus', true);
         }
-    }
-
-    async initObjectsLegacy() {
-
-        const count = await this.api.getZoneCount();
-
-        const zones = await this.api.getAllZones(count);
-
-        for (const zone of zones) {
-
-            await this.createZone(zone.id, zone.name);
-        }
-    }
-
-    // ─────────────────────────────────────────────
-    // Zone Struktur
-    // ─────────────────────────────────────────────
-
-    async createZone(id, name) {
-
-        const base = `zones.${id}`;
-
-        await this.setObjectNotExistsAsync(base, {
-            type: 'channel',
-            common: { name },
-            native: {}
-        });
-
-        await this.createState(`${base}.currentTemperature`, 'Ist Temperatur', false);
-        await this.createState(`${base}.targetTemperature`, 'Soll Temperatur', true);
-        await this.createState(`${base}.humidity`, 'Luftfeuchtigkeit', false);
-        await this.createState(`${base}.modeRaw`, 'Modus', true);
     }
 
     async createState(id, name, write) {
@@ -190,19 +170,15 @@ class TouchlineAdapter extends utils.Adapter {
         });
     }
 
-    // ─────────────────────────────────────────────
-    // Polling
-    // ─────────────────────────────────────────────
-
     startPolling() {
 
         const interval = (this.config.pollInterval || 30) * 1000;
 
-        this.log.info(`Polling alle ${interval / 1000} Sekunden`);
-
         this.poll();
 
         this.pollTimer = setInterval(() => this.poll(), interval);
+
+        this.log.info(`Polling gestartet (${interval / 1000}s)`);
     }
 
     async poll() {
@@ -224,7 +200,23 @@ class TouchlineAdapter extends utils.Adapter {
 
             for (const zone of zones) {
 
-                await this.updateZone(zone);
+                const zoneName = zone.name || `zone_${zone.id}`;
+
+                const safeName = zoneName
+                    .toLowerCase()
+                    .replace(/\s+/g, '_')
+                    .replace(/[^a-z0-9_]/g, '');
+
+                const base = `zones.${safeName}`;
+
+                await this.setStateAsync(`${base}.currentTemperature`, zone.currentTemperature, true);
+                await this.setStateAsync(`${base}.targetTemperature`, zone.targetTemperature, true);
+
+                if (zone.humidity !== undefined)
+                    await this.setStateAsync(`${base}.humidity`, zone.humidity, true);
+
+                if (zone.modeRaw !== undefined)
+                    await this.setStateAsync(`${base}.modeRaw`, zone.modeRaw, true);
             }
 
             await this.setStateAsync('info.connection', true, true);
@@ -237,24 +229,6 @@ class TouchlineAdapter extends utils.Adapter {
         }
     }
 
-    async updateZone(zone) {
-
-        const base = `zones.${zone.id}`;
-
-        await this.setStateAsync(`${base}.currentTemperature`, zone.currentTemperature, true);
-        await this.setStateAsync(`${base}.targetTemperature`, zone.targetTemperature, true);
-
-        if (zone.humidity !== undefined)
-            await this.setStateAsync(`${base}.humidity`, zone.humidity, true);
-
-        if (zone.modeRaw !== undefined)
-            await this.setStateAsync(`${base}.modeRaw`, zone.modeRaw, true);
-    }
-
-    // ─────────────────────────────────────────────
-    // Steuerung
-    // ─────────────────────────────────────────────
-
     async onStateChange(id, state) {
 
         if (!state || state.ack) return;
@@ -263,73 +237,52 @@ class TouchlineAdapter extends utils.Adapter {
 
         if (parts[2] !== 'zones') return;
 
-        const zoneId = parts[3];
-        const key = parts[4];
+        const zoneKey = parts[3];
+        const stateName = parts[4];
 
-        try {
+        const obj = await this.getObjectAsync(`zones.${zoneKey}`);
 
-            if (key === 'targetTemperature') {
+        const zoneId = obj.native.id;
 
-                await this.api.setTargetTemperature(zoneId, state.val);
-            }
+        if (stateName === 'targetTemperature') {
 
-            if (key === 'modeRaw') {
+            await this.api.setTargetTemperature(zoneId, state.val);
+        }
 
-                await this.api.setMode(zoneId, state.val);
-            }
+        if (stateName === 'modeRaw') {
 
-        } catch (e) {
-
-            this.log.error(`Fehler beim Schreiben: ${e.message}`);
+            await this.api.setMode(zoneId, state.val);
         }
     }
-
-    // ─────────────────────────────────────────────
-    // Admin UI Kommunikation
-    // ─────────────────────────────────────────────
 
     async onMessage(obj) {
 
         if (!obj || !obj.command) return;
 
-        if (obj.command === 'testConnection') {
+        if (obj.command === 'discover') {
 
-            const host = obj.message.host;
+            const devices = await discoverTouchline(this);
 
-            try {
+            this.sendTo(obj.from, obj.command, devices, obj.callback);
+        }
+    }
 
-                const sl = new TouchlineSLAPI(host, 3000);
+    async onUnload(callback) {
 
-                await sl.getModuleInfo();
+        try {
 
-                this.sendTo(obj.from, obj.command,
-                    { result: 'ok', type: 'sl' },
-                    obj.callback);
+            if (this.pollTimer) clearInterval(this.pollTimer);
 
-            } catch {
+            await this.setStateAsync('info.connection', false, true);
 
-                try {
+            callback();
 
-                    const legacy = new TouchlineLegacyAPI(host, 3000);
+        } catch {
 
-                    const count = await legacy.getZoneCount();
-
-                    this.sendTo(obj.from, obj.command,
-                        { result: 'ok', type: 'legacy', zones: count },
-                        obj.callback);
-
-                } catch (e) {
-
-                    this.sendTo(obj.from, obj.command,
-                        { error: e.message },
-                        obj.callback);
-                }
-            }
+            callback();
         }
     }
 }
-
-// Adapter starten
 
 if (require.main !== module) {
 
