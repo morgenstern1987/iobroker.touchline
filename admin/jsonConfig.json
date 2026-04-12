@@ -1,0 +1,104 @@
+{
+  "i18n": true,
+  "type": "tabs",
+  "items": {
+    "mainTab": {
+      "type": "panel",
+      "label": "Main settings",
+      "items": {
+        "localIp": {
+          "type": "text",
+          "label": "Local IP / Hostname of Touchline controller",
+          "help": "Example: 192.168.1.20"
+        },
+        "apiPort": {
+          "type": "number",
+          "label": "Touchline API port",
+          "min": 1,
+          "max": 65535,
+          "default": 80
+        },
+        "requestTimeout": {
+          "type": "number",
+          "label": "HTTP timeout (ms)",
+          "min": 1000,
+          "max": 60000,
+          "default": 5000
+        },
+        "protocol": {
+          "type": "select",
+          "label": "Protocol",
+          "options": [
+            {
+              "label": "HTTP",
+              "value": "http"
+            },
+            {
+              "label": "HTTPS",
+              "value": "https"
+            }
+          ]
+        },
+        "apiType": {
+          "type": "select",
+          "label": "Touchline API generation",
+          "options": [
+            {
+              "label": "Auto detect",
+              "value": "auto"
+            },
+            {
+              "label": "New API",
+              "value": "new"
+            },
+            {
+              "label": "Legacy API",
+              "value": "old"
+            }
+          ]
+        },
+        "pollInterval": {
+          "type": "number",
+          "label": "Polling interval (seconds)",
+          "min": 10,
+          "max": 3600,
+          "default": 60
+        },
+        "username": {
+          "type": "text",
+          "label": "Username (optional)"
+        },
+        "password": {
+          "type": "password",
+          "label": "Password (optional)"
+        },
+        "token": {
+          "type": "password",
+          "label": "Bearer token (optional)"
+        },
+        "customEndpoints": {
+          "type": "text",
+          "label": "Additional API paths (one per line)",
+          "help": "Example: /api/v1/weather,/api/v1/home"
+        }
+      }
+    },
+    "bridgeTab": {
+      "type": "panel",
+      "label": "Web bridge",
+      "items": {
+        "enableWebServer": {
+          "type": "checkbox",
+          "label": "Enable local bridge webserver"
+        },
+        "webPort": {
+          "type": "number",
+          "label": "Webserver port",
+          "min": 1024,
+          "max": 65535,
+          "default": 8099
+        }
+      }
+    }
+  }
+}
