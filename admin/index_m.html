@@ -111,15 +111,17 @@ function load(settings, onChange) {
     onChange(false);
 }
 
-    function save(callback) {
-        callback({
-            host:           document.getElementById('host').value.trim(),
-            apiVersion:     document.getElementById('apiVersion').value,
-            pollInterval:   parseInt(document.getElementById('pollInterval').value) || 30,
-            requestTimeout: parseInt(document.getElementById('requestTimeout').value) || 5000,
-        });
-    }
+function save(callback) {
 
+    const obj = {
+        host: document.getElementById('host').value.trim(),
+        apiVersion: document.getElementById('apiVersion').value,
+        pollInterval: parseInt(document.getElementById('pollInterval').value) || 30,
+        requestTimeout: parseInt(document.getElementById('requestTimeout').value) || 5000
+    };
+
+    callback(obj);
+}
     function testConnection() {
         const host = document.getElementById('host').value.trim();
         const result = document.getElementById('testResult');
