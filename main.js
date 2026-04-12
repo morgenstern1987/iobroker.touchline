@@ -25,32 +25,40 @@ class TouchlineAdapter extends utils.Adapter {
 
     async onReady() {
 
-        await this.setObjectNotExistsAsync('info.connection', {
-            type: 'state',
-            common: {
-                name: 'Connected',
-                type: 'boolean',
-                role: 'indicator.connected',
-                read: true,
-                write: false
-            },
-            native: {}
-        });
+    await this.setObjectNotExistsAsync('info', {
+        type: 'channel',
+        common: {
+            name: 'Information'
+        },
+        native: {}
+    });
 
-        this.setState('info.connection', false, true);
+    await this.setObjectNotExistsAsync('info.connection', {
+        type: 'state',
+        common: {
+            name: 'Connected',
+            type: 'boolean',
+            role: 'indicator.connected',
+            read: true,
+            write: false,
+            def: false
+        },
+        native: {}
+    });
 
-        const host = (this.config.host || '').trim();
+    await this.setStateAsync('info.connection', false, true);
 
-        if (!host) {
-            this.log.error('Keine IP-Adresse konfiguriert. Bitte in den Adaptereinstellungen eintragen.');
-            return;
-        }
+    const host = (this.config.host || '').trim();
 
-        this.log.info(`Verbinde mit Roth Touchline unter ${host}`);
-
-        await this.detectAndConnect(host);
+    if (!host) {
+        this.log.error('Keine IP-Adresse konfiguriert. Bitte in den Adaptereinstellungen eintragen.');
+        return;
     }
 
+    this.log.info(`Verbinde mit Roth Touchline unter ${host}`);
+
+    await this.detectAndConnect(host);
+}
     async onUnload(callback) {
         try {
             this.stopPolling();
