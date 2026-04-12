@@ -2,46 +2,48 @@
   "common": {
     "name": "touchline",
     "version": "0.1.0",
-    "news": {
-      "0.1.0": {
-        "en": "Initial release – supports legacy CGI API and new SL REST API",
-        "de": "Erstveröffentlichung – unterstützt Legacy-CGI-API und neue SL REST-API"
-      }
-    },
-    "title": "Roth Touchline",
+    "title": "Roth Touchline Adapter",
     "titleLang": {
-      "en": "Roth Touchline Heating",
-      "de": "Roth Touchline Heizung"
+      "en": "Roth Touchline Adapter",
+      "de": "Roth Touchline Adapter"
     },
     "desc": {
-      "en": "Adapter for Roth Touchline and Touchline SL floor heating controllers (local network)",
-      "de": "Adapter für Roth Touchline und Touchline SL Fußbodenheizungsregler (lokales Netzwerk)"
+      "en": "Adapter for Roth Touchline floor heating controller",
+      "de": "Adapter für Roth Touchline Fußbodenheizung"
     },
-    "authors": ["morgenstern1987 <morgenstern1987@github>"],
-    "keywords": ["roth", "touchline", "heating", "floor heating", "SL"],
+    "authors": [
+      "Henrik Morgenstern"
+    ],
+    "keywords": [
+      "heating",
+      "touchline",
+      "floor heating"
+    ],
     "license": "MIT",
     "platform": "Javascript/Node.js",
-    "icon": "admin/touchline.png",
     "mode": "daemon",
     "type": "climate-control",
     "enabled": true,
-    "readme": "[github.com](https://github.com/morgenstern1987/iobroker.touchline/blob/main/README.md)",
-    "loglevel": "info",
-    "restartSchedule": "",
+    "materialize": true,
     "adminUI": {
       "config": "materialize"
     },
     "connectionType": "local",
     "dataSource": "poll",
-    "messagebox": true
+    "loglevel": "info",
+    "icon": "touchline.png",
+    "extIcon": "https://raw.githubusercontent.com/morgenstern1987/iobroker.touchline/main/admin/touchline.png",
+    "readme": "https://github.com/morgenstern1987/iobroker.touchline",
+    "compact": true
   },
+
   "native": {
     "host": "",
-    "apiVersion": "auto",
-    "pollInterval": 30,
-    "requestTimeout": 5000
+    "pollInterval": 30
   },
+
   "objects": [],
+
   "instanceObjects": [
     {
       "_id": "info",
@@ -55,7 +57,7 @@
       "_id": "info.connection",
       "type": "state",
       "common": {
-        "name": "Connected to controller",
+        "name": "Connected",
         "type": "boolean",
         "role": "indicator.connected",
         "read": true,
