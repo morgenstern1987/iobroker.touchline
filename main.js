@@ -129,6 +129,9 @@ class TouchlineAdapter extends utils.Adapter {
 
             const data = await this.api.readMultiple(variables);
 
+            // DEBUG
+this.log.info("Touchline RAW Daten: " + JSON.stringify(data));
+
             for (let i = 0; i < zones; i++) {
 
                 const current = parseInt(data[`G${i}.RaumTemp`] || 0) / 100;
