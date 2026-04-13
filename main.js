@@ -17,7 +17,6 @@ class TouchlineAdapter extends utils.Adapter {
 
         this.on('ready', this.onReady.bind(this));
         this.on('stateChange', this.onStateChange.bind(this));
-        this.on('unload', this.onUnload.bind(this));
     }
 
     async onReady() {
@@ -62,11 +61,13 @@ class TouchlineAdapter extends utils.Adapter {
 
         for (let i = 0; i < zoneCount; i++) {
 
+            const name = await this.api.getZoneName(i);
+
             const base = `zones.zone${i}`;
 
             await this.setObjectNotExistsAsync(base, {
                 type: "channel",
-                common: { name: `Zone ${i}` },
+                common: { name },
                 native: {}
             });
 
@@ -78,11 +79,7 @@ class TouchlineAdapter extends utils.Adapter {
 
         this.poll();
 
-        this.pollTimer = setInterval(() => {
-
-            this.poll();
-
-        }, (this.config.pollInterval || 30) * 1000);
+        this.pollTimer = setInterval(() => this.poll(), 30000);
     }
 
     async createState(id, name, write) {
@@ -104,17 +101,14 @@ class TouchlineAdapter extends utils.Adapter {
 
         try {
 
-            const zoneCount = await this.api.getZoneCount();
+            const zones = await this.api.getZoneCount();
 
-            const data = await this.api.getZones(zoneCount);
+            for (let i = 0; i < zones; i++) {
 
-            for (let i = 0; i < zoneCount; i++) {
+                const temps = await this.api.getZoneTemperature(i);
 
-                const current = data[10000 + i * 6 + 1] / 10;
-                const target = data[10000 + i * 6] / 10;
-
-                await this.setStateAsync(`zones.zone${i}.currentTemperature`, current, true);
-                await this.setStateAsync(`zones.zone${i}.targetTemperature`, target, true);
+                await this.setStateAsync(`zones.zone${i}.currentTemperature`, temps.current, true);
+                await this.setStateAsync(`zones.zone${i}.targetTemperature`, temps.target, true);
             }
 
             await this.setStateAsync("info.connection", true, true);
@@ -139,25 +133,8 @@ class TouchlineAdapter extends utils.Adapter {
 
         if (parts[4] === "targetTemperature") {
 
-            try {
-
-                await this.api.setTargetTemperature(zone, state.val);
-
-            } catch (e) {
-
-                this.log.error("Solltemperatur setzen fehlgeschlagen");
-            }
+            await this.api.setTargetTemperature(zone, state.val);
         }
-    }
-
-    onUnload(callback) {
-
-        if (this.pollTimer) {
-
-            clearInterval(this.pollTimer);
-        }
-
-        callback();
     }
 }
 
