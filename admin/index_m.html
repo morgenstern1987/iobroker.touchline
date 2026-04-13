@@ -1,143 +1,102 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <link rel="stylesheet" href="../../css/adapter.css" />
-    <link rel="stylesheet" href="../../lib/css/materialize.css" />
-    <script src="../../lib/js/materialize.js"></script>
-    <script src="../../js/adapter-settings.js"></script>
-    <script src="words.js"></script>
-    <style>
-        .help-block { font-size: 0.85em; color: #757575; margin-top: -8px; margin-bottom: 12px; }
-        #testResult { margin-top: 12px; padding: 10px; border-radius: 4px; display: none; }
-        #testResult.success { background: #e8f5e9; color: #2e7d32; }
-        #testResult.error   { background: #ffebee; color: #c62828; }
-    </style>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="../../css/adapter.css" />
+  <link rel="stylesheet" href="../../lib/css/materialize.css" />
+  <script src="../../lib/js/materialize.js"></script>
+  <script src="../../js/adapter-settings.js"></script>
+  <script src="words.js"></script>
+  <style>
+    .help-block {
+      font-size: 0.85em;
+      color: #757575;
+      margin-top: -8px;
+      margin-bottom: 12px;
+    }
+  </style>
 </head>
 <body>
-
 <div class="m adapter-container">
-    <div class="row">
-        <div class="col s12">
-            <h5 data-i18n="settings_title">Roth Touchline Einstellungen</h5>
-        </div>
+  <div class="row">
+    <div class="col s12">
+      <h5 data-i18n="settings_title">Roth Touchline Einstellungen</h5>
     </div>
+  </div>
 
-    <!-- IP Adresse -->
-    <div class="row">
-        <div class="input-field col s12 m6">
-            <input id="host" type="text" class="value" placeholder="192.168.1.100" />
-            <label for="host" class="translate" data-i18n="host_label">IP-Adresse des Controllers</label>
-        </div>
-        <div class="col s12 m6">
-            <p class="help-block" data-i18n="host_help">
-                Lokale IP-Adresse deines Roth Touchline Controllers (ohne http://).
-            </p>
-        </div>
+  <!-- IP Adresse -->
+  <div class="row">
+    <div class="input-field col s12 m6">
+      <input id="host" type="text" class="value" placeholder="192.168.1.100" />
+      <label for="host" class="translate" data-i18n="host_label">IP-Adresse des Controllers</label>
+      <span class="help-block translate" data-i18n="host_help">
+        Lokale IP-Adresse deines Roth Touchline Controllers (ohne http://).
+      </span>
     </div>
+  </div>
 
-    <!-- API Version -->
-    <div class="row">
-        <div class="input-field col s12 m6">
-            <select id="apiVersion" class="value">
-                <option value="auto"   data-i18n="api_auto">Automatisch erkennen</option>
-                <option value="sl"     data-i18n="api_sl">Touchline SL (neue Firmware)</option>
-                <option value="legacy" data-i18n="api_legacy">Touchline Legacy (alte Firmware)</option>
-            </select>
-            <label data-i18n="api_label">API-Version</label>
-        </div>
+  <!-- API Version -->
+  <div class="row">
+    <div class="input-field col s12 m6">
+      <select id="apiVersion" class="value">
+        <option value="auto"   data-i18n="api_auto">Automatisch erkennen</option>
+        <option value="sl"     data-i18n="api_sl">Touchline SL (neue Firmware)</option>
+        <option value="legacy" data-i18n="api_legacy">Touchline Legacy (alte Firmware)</option>
+      </select>
+      <label data-i18n="api_label">API-Version</label>
     </div>
+  </div>
 
-    <!-- Poll-Intervall -->
-    <div class="row">
-        <div class="input-field col s12 m6">
-            <input id="pollInterval" type="number" class="value" min="5" max="3600" step="5" />
-            <label for="pollInterval" data-i18n="poll_label">Abfrageintervall (Sekunden)</label>
-        </div>
-        <div class="col s12 m6">
-            <p class="help-block" data-i18n="poll_help">
-                Wie oft sollen die Werte abgerufen werden? Empfohlen: 30 Sekunden.
-            </p>
-        </div>
+  <!-- Poll-Intervall -->
+  <div class="row">
+    <div class="input-field col s12 m6">
+      <input id="pollInterval" type="number" class="value" min="5" max="3600" step="5" />
+      <label for="pollInterval" data-i18n="poll_label">Abfrageintervall (Sekunden)</label>
+      <span class="help-block translate" data-i18n="poll_help">
+        Wie oft sollen Werte abgerufen werden? Empfohlen: 30 Sekunden.
+      </span>
     </div>
+  </div>
 
-    <!-- Request Timeout -->
-    <div class="row">
-        <div class="input-field col s12 m6">
-            <input id="requestTimeout" type="number" class="value" min="1000" max="30000" step="500" />
-            <label for="requestTimeout" data-i18n="timeout_label">Request-Timeout (Millisekunden)</label>
-        </div>
+  <!-- Request Timeout -->
+  <div class="row">
+    <div class="input-field col s12 m6">
+      <input id="requestTimeout" type="number" class="value" min="1000" max="30000" step="500" />
+      <label for="requestTimeout" data-i18n="timeout_label">Request-Timeout (Millisekunden)</label>
     </div>
-
-    <!-- Verbindungstest -->
-    <div class="row">
-        <div class="col s12 m6">
-            <button class="btn waves-effect waves-light blue" id="btnTest" onclick="testConnection()">
-                <i class="material-icons left">network_check</i>
-                <span data-i18n="test_btn">Verbindung testen</span>
-            </button>
-            <div id="testResult"></div>
-        </div>
-    </div>
+  </div>
 </div>
 
 <script>
-    // ioBroker Admin Standardfunktionen
-    function load(settings, onChange) {
-        if (!settings) return;
+function load(settings, onChange) {
+  if (!settings) return;
 
-        document.getElementById('host').value          = settings.host          || '';
-        document.getElementById('pollInterval').value  = settings.pollInterval  || 30;
-        document.getElementById('requestTimeout').value = settings.requestTimeout || 5000;
+  $('#host').val(settings.host || '');
+  $('#pollInterval').val(settings.pollInterval || 30);
+  $('#requestTimeout').val(settings.requestTimeout || 5000);
 
-        // Select muss nach Materialize-Init gesetzt werden
-        setTimeout(() => {
-            const sel = document.getElementById('apiVersion');
-            sel.value = settings.apiVersion || 'auto';
-            M.FormSelect.init(sel);
-        }, 100);
+  setTimeout(() => {
+    const sel = document.getElementById('apiVersion');
+    sel.value = settings.apiVersion || 'auto';
+    M.FormSelect.init(sel);
+  }, 100);
 
-        M.updateTextFields();
+  M.updateTextFields();
+  $('.value').each(function () {
+    $(this).on('change', () => onChange());
+  });
+}
 
-        // Änderungserkennung
-        document.querySelectorAll('.value').forEach(el => {
-            el.addEventListener('change', onChange);
-        });
-    }
-
-    function save(callback) {
-        callback({
-            host:           document.getElementById('host').value.trim(),
-            apiVersion:     document.getElementById('apiVersion').value,
-            pollInterval:   parseInt(document.getElementById('pollInterval').value) || 30,
-            requestTimeout: parseInt(document.getElementById('requestTimeout').value) || 5000,
-        });
-    }
-
-    function testConnection() {
-        const host = document.getElementById('host').value.trim();
-        const result = document.getElementById('testResult');
-        result.style.display = 'none';
-
-        if (!host) {
-            result.className    = 'error';
-            result.textContent  = 'Bitte zuerst eine IP-Adresse eingeben.';
-            result.style.display = 'block';
-            return;
-        }
-
-        sendTo(null, 'testConnection', { host }, function (res) {
-            result.style.display = 'block';
-            if (res && res.result === 'ok') {
-                result.className = 'success';
-                result.textContent = `Verbunden! API: ${res.type.toUpperCase()}`
-                    + (res.zones !== undefined ? ` – ${res.zones} Zone(n) gefunden` : '');
-            } else {
-                result.className = 'error';
-                result.textContent = res?.error || 'Verbindung fehlgeschlagen.';
-            }
-        });
-    }
+function save(callback) {
+  const obj = {
+    host: $('#host').val().trim(),
+    apiVersion: $('#apiVersion').val(),
+    pollInterval: parseInt($('#pollInterval').val()) || 30,
+    requestTimeout: parseInt($('#requestTimeout').val()) || 5000
+  };
+  callback(obj);
+}
 </script>
+
 </body>
 </html>
