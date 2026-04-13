@@ -1,90 +1,41 @@
-<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <link rel="stylesheet" href="../../css/adapter.css" />
-  <link rel="stylesheet" href="../../lib/css/materialize.css" />
-  <script src="../../lib/js/materialize.js"></script>
-  <script src="../../js/adapter-settings.js"></script>
-  <script src="words.js"></script>
-  <style>
-    .help-block {
-      font-size: 0.85em;
-      color: #757575;
-      margin-top: -8px;
-      margin-bottom: 12px;
-    }
-  </style>
-</head>
-<body>
-<div class="m adapter-container">
-  <div class="row">
-    <div class="col s12">
-      <h5 data-i18n="settings_title">Roth Touchline Einstellungen</h5>
-    </div>
-  </div>
 
-  <!-- IP Adresse -->
-  <div class="row">
-    <div class="input-field col s12 m6">
-      <input id="host" type="text" class="value" placeholder="192.168.1.100" />
-      <label for="host" class="translate" data-i18n="host_label">IP-Adresse des Controllers</label>
-      <span class="help-block translate" data-i18n="host_help">
-        Lokale IP-Adresse deines Roth Touchline Controllers (ohne http://).
-      </span>
-    </div>
-  </div>
+<link rel="stylesheet" type="text/css" href="../../lib/css/themes/jquery-ui/redmond/jquery-ui.min.css"/>
+<script type="text/javascript" src="../../lib/js/jquery-1.11.1.min.js"></script>
+<script type="text/javascript" src="../../socket.io/socket.io.js"></script>
+<script type="text/javascript" src="../../lib/js/jquery-ui-1.10.3.full.min.js"></script>
 
-  <!-- API Version -->
-  <div class="row">
-    <div class="input-field col s12 m6">
-      <select id="apiVersion" class="value">
-        <option value="auto"   data-i18n="api_auto">Automatisch erkennen</option>
-        <option value="sl"     data-i18n="api_sl">Touchline SL (neue Firmware)</option>
-        <option value="legacy" data-i18n="api_legacy">Touchline Legacy (alte Firmware)</option>
-      </select>
-      <label data-i18n="api_label">API-Version</label>
-    </div>
-  </div>
+<link rel="stylesheet" type="text/css" href="../../css/adapter.css"/>
+<script type="text/javascript" src="../../js/translate.js"></script>
+<script type="text/javascript" src="../../js/adapter-settings.js"></script>
+<script type="text/javascript" src="words.js"></script>
 
-  <!-- Poll-Intervall -->
-  <div class="row">
-    <div class="input-field col s12 m6">
-      <input id="pollInterval" type="number" class="value" min="5" max="3600" step="5" />
-      <label for="pollInterval" data-i18n="poll_label">Abfrageintervall (Sekunden)</label>
-      <span class="help-block translate" data-i18n="poll_help">
-        Wie oft sollen Werte abgerufen werden? Empfohlen: 30 Sekunden.
-      </span>
-    </div>
-  </div>
-
-  <!-- Request Timeout -->
-  <div class="row">
-    <div class="input-field col s12 m6">
-      <input id="requestTimeout" type="number" class="value" min="1000" max="30000" step="500" />
-      <label for="requestTimeout" data-i18n="timeout_label">Request-Timeout (Millisekunden)</label>
-    </div>
-  </div>
-</div>
-
-<script>
+<script type="text/javascript">
 
 function load(settings, onChange) {
 
     if (!settings) return;
 
-    $('#host').val(settings.host || '');
-    $('#pollInterval').val(settings.pollInterval || 30);
-
-    M.updateTextFields();
-
     $('.value').each(function () {
 
-        const $this = $(this);
+        var $key = $(this);
+        var id = $key.attr('id');
 
-        $this.on('change keyup', function () {
-            onChange(true);
-        });
+        if ($key.attr('type') === 'checkbox') {
+
+            $key.prop('checked', settings[id]).change(function() {
+                onChange(true);
+            });
+
+        } else {
+
+            $key.val(settings[id]).change(function() {
+                onChange(true);
+            }).keyup(function() {
+                onChange(true);
+            });
+
+        }
     });
 
     onChange(false);
@@ -92,15 +43,49 @@ function load(settings, onChange) {
 
 function save(callback) {
 
-    const obj = {
-        host: $('#host').val(),
-        pollInterval: parseInt($('#pollInterval').val(), 10) || 30
-    };
+    var obj = {};
+
+    $('.value').each(function () {
+
+        var $this = $(this);
+
+        if ($this.attr('type') === 'checkbox') {
+            obj[$this.attr('id')] = $this.prop('checked');
+        } else {
+            obj[$this.attr('id')] = $this.val();
+        }
+
+    });
 
     callback(obj);
 }
 
 </script>
 
-</body>
+<div id="adapter-container">
+
+<table>
+<tr>
+<td><h3 class="translate">Touchline adapter settings</h3></td>
+</tr>
+</table>
+
+<table>
+
+<tr>
+<td><label for="host" class="translate">Controller IP:</label></td>
+<td><input class="value" id="host"/></td>
+</tr>
+
+<tr>
+<td><label for="pollInterval" class="translate">Polling interval:</label></td>
+<td><input class="value" id="pollInterval"/></td>
+</tr>
+
+</table>
+
+<p class="translate">Adapter restarts after saving configuration</p>
+
+</div>
+
 </html>
