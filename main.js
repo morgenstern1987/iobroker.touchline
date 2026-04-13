@@ -6,6 +6,7 @@ const LegacyAPI = require('./lib/legacy-api');
 class TouchlineAdapter extends utils.Adapter {
 
     constructor(options = {}) {
+
         super({
             ...options,
             name: 'touchline'
@@ -45,8 +46,11 @@ class TouchlineAdapter extends utils.Adapter {
         let zoneCount = 0;
 
         try {
+
             zoneCount = await this.api.getZoneCount();
+
         } catch (e) {
+
             this.log.error("Touchline nicht erreichbar");
             return;
         }
@@ -89,7 +93,10 @@ class TouchlineAdapter extends utils.Adapter {
 
         this.poll();
 
-        this.pollTimer = setInterval(() => this.poll(), (this.config.pollInterval || 30) * 1000);
+        this.pollTimer = setInterval(
+            () => this.poll(),
+            (this.config.pollInterval || 30) * 1000
+        );
     }
 
     async createNumberState(id, name, write) {
@@ -127,18 +134,24 @@ class TouchlineAdapter extends utils.Adapter {
                 variables.push(`G${i}.available`);
             }
 
-            const data = await this.api.readMultiple(variables);
-
-            // DEBUG
-this.log.info("Touchline RAW Daten: " + JSON.stringify(data));
+            const data = await this.api.readVariables(variables);
 
             for (let i = 0; i < zones; i++) {
 
                 const current = parseInt(data[`G${i}.RaumTemp`] || 0) / 100;
                 const target = parseInt(data[`G${i}.SollTemp`] || 0) / 100;
 
-                await this.setStateAsync(`zones.zone${i}.currentTemperature`, current, true);
-                await this.setStateAsync(`zones.zone${i}.targetTemperature`, target, true);
+                await this.setStateAsync(
+                    `zones.zone${i}.currentTemperature`,
+                    current,
+                    true
+                );
+
+                await this.setStateAsync(
+                    `zones.zone${i}.targetTemperature`,
+                    target,
+                    true
+                );
 
                 await this.setStateAsync(
                     `zones.zone${i}.mode`,
@@ -221,7 +234,10 @@ this.log.info("Touchline RAW Daten: " + JSON.stringify(data));
 }
 
 if (require.main !== module) {
+
     module.exports = options => new TouchlineAdapter(options);
+
 } else {
+
     new TouchlineAdapter();
 }
