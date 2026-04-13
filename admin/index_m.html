@@ -68,34 +68,38 @@
 </div>
 
 <script>
+
 function load(settings, onChange) {
-  if (!settings) return;
 
-  $('#host').val(settings.host || '');
-  $('#pollInterval').val(settings.pollInterval || 30);
-  $('#requestTimeout').val(settings.requestTimeout || 5000);
+    if (!settings) return;
 
-  setTimeout(() => {
-    const sel = document.getElementById('apiVersion');
-    sel.value = settings.apiVersion || 'auto';
-    M.FormSelect.init(sel);
-  }, 100);
+    $('#host').val(settings.host || '');
+    $('#pollInterval').val(settings.pollInterval || 30);
 
-  M.updateTextFields();
-  $('.value').each(function () {
-    $(this).on('change', () => onChange());
-  });
+    M.updateTextFields();
+
+    $('.value').each(function () {
+
+        const $this = $(this);
+
+        $this.on('change keyup', function () {
+            onChange(true);
+        });
+    });
+
+    onChange(false);
 }
 
 function save(callback) {
-  const obj = {
-    host: $('#host').val().trim(),
-    apiVersion: $('#apiVersion').val(),
-    pollInterval: parseInt($('#pollInterval').val()) || 30,
-    requestTimeout: parseInt($('#requestTimeout').val()) || 5000
-  };
-  callback(obj);
+
+    const obj = {
+        host: $('#host').val(),
+        pollInterval: parseInt($('#pollInterval').val(), 10) || 30
+    };
+
+    callback(obj);
 }
+
 </script>
 
 </body>
