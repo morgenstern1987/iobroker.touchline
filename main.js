@@ -6,7 +6,6 @@ const LegacyAPI = require('./lib/legacy-api');
 class TouchlineAdapter extends utils.Adapter {
 
     constructor(options = {}) {
-
         super({
             ...options,
             name: 'touchline'
@@ -37,9 +36,7 @@ class TouchlineAdapter extends utils.Adapter {
         const host = this.config.host;
 
         if (!host) {
-
             this.log.error("Keine IP gesetzt");
-
             return;
         }
 
@@ -48,13 +45,9 @@ class TouchlineAdapter extends utils.Adapter {
         let zoneCount = 0;
 
         try {
-
             zoneCount = await this.api.getZoneCount();
-
         } catch (e) {
-
             this.log.error("Touchline nicht erreichbar");
-
             return;
         }
 
@@ -63,7 +56,6 @@ class TouchlineAdapter extends utils.Adapter {
         for (let i = 0; i < zoneCount; i++) {
 
             const name = await this.api.getZoneName(i);
-
             const base = `zones.zone${i}`;
 
             await this.setObjectNotExistsAsync(base, {
@@ -79,7 +71,18 @@ class TouchlineAdapter extends utils.Adapter {
             await this.createState(`${base}.minTemp`, "Min Temperatur", false);
             await this.createState(`${base}.maxTemp`, "Max Temperatur", false);
             await this.createState(`${base}.step`, "Temp Schritt", false);
-            await this.createState(`${base}.available`, "Verfügbar", false);
+
+            await this.setObjectNotExistsAsync(`${base}.available`, {
+                type: "state",
+                common: {
+                    name: "Verfügbar",
+                    type: "boolean",
+                    role: "indicator.reachable",
+                    read: true,
+                    write: false
+                },
+                native: {}
+            });
         }
 
         this.subscribeStates("zones.*.targetTemperature");
@@ -120,23 +123,41 @@ class TouchlineAdapter extends utils.Adapter {
                 await this.setStateAsync(`zones.zone${i}.currentTemperature`, current, true);
                 await this.setStateAsync(`zones.zone${i}.targetTemperature`, target, true);
 
-                await this.setStateAsync(`zones.zone${i}.mode`,
-                    parseInt(data[`G${i}.OPMode`] || 0), true);
+                await this.setStateAsync(
+                    `zones.zone${i}.mode`,
+                    parseInt(data[`G${i}.OPMode`] || 0),
+                    true
+                );
 
-                await this.setStateAsync(`zones.zone${i}.weekProgram`,
-                    parseInt(data[`G${i}.WeekProg`] || 0), true);
+                await this.setStateAsync(
+                    `zones.zone${i}.weekProgram`,
+                    parseInt(data[`G${i}.WeekProg`] || 0),
+                    true
+                );
 
-                await this.setStateAsync(`zones.zone${i}.minTemp`,
-                    parseInt(data[`G${i}.SollTempMinVal`] || 0) / 100, true);
+                await this.setStateAsync(
+                    `zones.zone${i}.minTemp`,
+                    parseInt(data[`G${i}.SollTempMinVal`] || 0) / 100,
+                    true
+                );
 
-                await this.setStateAsync(`zones.zone${i}.maxTemp`,
-                    parseInt(data[`G${i}.SollTempMaxVal`] || 0) / 100, true);
+                await this.setStateAsync(
+                    `zones.zone${i}.maxTemp`,
+                    parseInt(data[`G${i}.SollTempMaxVal`] || 0) / 100,
+                    true
+                );
 
-                await this.setStateAsync(`zones.zone${i}.step`,
-                    parseInt(data[`G${i}.SollTempStepVal`] || 0) / 100, true);
+                await this.setStateAsync(
+                    `zones.zone${i}.step`,
+                    parseInt(data[`G${i}.SollTempStepVal`] || 0) / 100,
+                    true
+                );
 
-                await this.setStateAsync(`zones.zone${i}.available`,
-                    data[`G${i}.available`] === "online", true);
+                await this.setStateAsync(
+                    `zones.zone${i}.available`,
+                    data[`G${i}.available`] === "online",
+                    true
+                );
             }
 
             await this.setStateAsync("info.connection", true, true);
@@ -174,7 +195,9 @@ class TouchlineAdapter extends utils.Adapter {
 
     onUnload(callback) {
 
-        if (this.pollTimer) clearInterval(this.pollTimer);
+        if (this.pollTimer) {
+            clearInterval(this.pollTimer);
+        }
 
         callback();
     }
