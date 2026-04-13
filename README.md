@@ -1,54 +1,31 @@
 # ioBroker.touchline
 
-[![NPM version](https://img.shields.io/npm/v/iobroker.touchline.svg)](https://www.npmjs.com/package/iobroker.touchline)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+ioBroker Adapter für **Roth Touchline Fußbodenheizungssteuerungen (Legacy API)**.
 
-Adapter für **Roth Touchline** und **Roth Touchline SL** Fußbodenheizungsregler.
-Unterstützt beide Firmware-Generationen über das lokale Netzwerk – kein Cloud-Zugriff nötig.
+Der Adapter liest Daten direkt über die lokale HTTP-Schnittstelle des Controllers aus und ermöglicht das Setzen der Solltemperatur einzelner Räume.
 
-## Unterstützte Geräte
+Der Fokus liegt bewusst auf der **alten Touchline CGI API**, die von vielen Installationen verwendet wird.
 
-| Gerät            | API         | Status |
-|------------------|-------------|--------|
-| Touchline (alt)  | Legacy CGI  | ✅     |
-| Touchline SL     | REST JSON   | ✅     |
+## Features
 
-## Datenpunkte
+- automatische **Raumerkennung**
+- Lesen von **Ist-Temperatur**
+- Lesen von **Soll-Temperatur**
+- **Solltemperatur setzen**
+- Anzeige von **Betriebsmodus**
+- Anzeige von **Wochenprogramm**
+- Anzeige von **Min / Max Solltemperatur**
+- Anzeige von **Temperaturschrittweite**
+- Anzeige ob Raum **online/verfügbar**
+- stabile Kommunikation über lokale **Legacy CGI API**
 
-### `system.*`
-| Datenpunkt       | Beschreibung        |
-|------------------|---------------------|
-| firmware         | Firmware-Version    |
-| serialNumber     | Seriennummer        |
-| apiVersion       | Erkannte API        |
+Der Adapter verwendet ausschließlich die **alte API** und ist damit kompatibel zu vielen älteren Touchline Systemen.
 
-### `zones.<id>.*`
-| Datenpunkt           | Beschreibung              | Schreibbar |
-|----------------------|---------------------------|------------|
-| name                 | Zonenname                 | –          |
-| currentTemperature   | Isttemperatur (°C)        | –          |
-| targetTemperature    | Solltemperatur (°C)       | ✅         |
-| floorTemperature     | Fußbodentemperatur (°C)   | –          |
-| humidity             | Luftfeuchtigkeit (%)      | –          |
-| co2                  | CO₂ (ppm, SL only)        | –          |
-| mode                 | Modus als Text            | –          |
-| modeRaw              | Modus (0–3)               | ✅         |
-| windowContact        | Fensterkontakt offen?     | –          |
-| valvePosition        | Ventilstellung (%)        | –          |
-| weekSchedule         | Wochenprogramm-ID         | ✅ (SL)    |
-| online               | Zone erreichbar           | –          |
+---
 
-### Modi
-| Wert | Legacy   | SL       |
-|------|----------|----------|
-| 0    | auto     | standby  |
-| 1    | day      | auto     |
-| 2    | night    | manual   |
-| 3    | holiday  | holiday  |
+# Unterstützte Controller
 
-## Installation
+- Roth Touchline (Legacy Controller)
+- Roth Touchline Floor Heating Control
 
-```bash
-cd /opt/iobroker
-npm install iobroker.touchline
-iobroker add touchline
+Der Adapter nutzt die lokalen CGI-Endpunkte:
