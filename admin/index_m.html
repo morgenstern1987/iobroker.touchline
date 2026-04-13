@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-
 <head>
 
 <meta charset="utf-8">
@@ -29,12 +28,12 @@
 <div class="row">
 
 <div class="input-field col s6">
-<input id="host" class="value" type="text">
+<input id="host" type="text" class="value"/>
 <label for="host">Controller IP</label>
 </div>
 
 <div class="input-field col s6">
-<input id="pollInterval" class="value" type="number">
+<input id="pollInterval" type="number" class="value"/>
 <label for="pollInterval">Polling Interval</label>
 </div>
 
@@ -53,8 +52,10 @@ function load(settings, onChange) {
 
     M.updateTextFields();
 
-    $('.value').on('change keyup', function () {
-        onChange();
+    $('.value').each(function () {
+        $(this).on('change keyup', function () {
+            onChange();
+        });
     });
 
     onChange(false);
@@ -62,10 +63,10 @@ function load(settings, onChange) {
 
 function save(callback) {
 
-    const obj = {};
-
-    obj.host = $('#host').val();
-    obj.pollInterval = parseInt($('#pollInterval').val()) || 30;
+    const obj = {
+        host: $('#host').val(),
+        pollInterval: parseInt($('#pollInterval').val(),10) || 30
+    };
 
     callback(obj);
 }
