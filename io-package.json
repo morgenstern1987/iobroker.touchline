@@ -11,19 +11,24 @@
       "en": "Adapter for Roth Touchline legacy heating controller",
       "de": "Adapter für Roth Touchline (alte API)"
     },
-    "authors": ["Henrik Morgenstern"],
+    "authors": [
+      "Henrik Morgenstern"
+    ],
     "license": "MIT",
     "platform": "Javascript/Node.js",
     "mode": "daemon",
     "type": "climate-control",
     "enabled": true,
     "materialize": true,
-    "adminUI": {
+
+    "admin": {
       "config": "materialize"
     },
+
     "connectionType": "local",
     "dataSource": "poll",
-    "loglevel": "info"
+    "loglevel": "info",
+    "compact": true
   },
 
   "native": {
@@ -35,6 +40,14 @@
 
   "instanceObjects": [
     {
+      "_id": "info",
+      "type": "channel",
+      "common": {
+        "name": "Information"
+      },
+      "native": {}
+    },
+    {
       "_id": "info.connection",
       "type": "state",
       "common": {
@@ -42,7 +55,8 @@
         "type": "boolean",
         "role": "indicator.connected",
         "read": true,
-        "write": false
+        "write": false,
+        "def": false
       },
       "native": {}
     }
