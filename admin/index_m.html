@@ -1,16 +1,44 @@
+<!DOCTYPE html>
 <html>
 
+<head>
+
+<meta charset="utf-8">
+
+<!-- required -->
 <link rel="stylesheet" type="text/css" href="../../lib/css/themes/jquery-ui/redmond/jquery-ui.min.css"/>
 <script type="text/javascript" src="../../lib/js/jquery-1.11.1.min.js"></script>
 <script type="text/javascript" src="../../socket.io/socket.io.js"></script>
 <script type="text/javascript" src="../../lib/js/jquery-ui-1.10.3.full.min.js"></script>
 
 <link rel="stylesheet" type="text/css" href="../../css/adapter.css"/>
+
 <script type="text/javascript" src="../../js/translate.js"></script>
 <script type="text/javascript" src="../../js/adapter-settings.js"></script>
 <script type="text/javascript" src="words.js"></script>
 
-<script type="text/javascript">
+<style>
+
+#adapter-container {
+    padding: 20px;
+}
+
+.settings-table {
+    width: 100%;
+    max-width: 600px;
+}
+
+.settings-table td {
+    padding: 6px;
+}
+
+.settings-table input {
+    width: 100%;
+}
+
+</style>
+
+<script>
 
 function load(settings, onChange) {
 
@@ -23,15 +51,15 @@ function load(settings, onChange) {
 
         if ($key.attr('type') === 'checkbox') {
 
-            $key.prop('checked', settings[id]).change(function() {
+            $key.prop('checked', settings[id]).change(function () {
                 onChange(true);
             });
 
         } else {
 
-            $key.val(settings[id]).change(function() {
+            $key.val(settings[id]).change(function () {
                 onChange(true);
-            }).keyup(function() {
+            }).keyup(function () {
                 onChange(true);
             });
 
@@ -62,24 +90,38 @@ function save(callback) {
 
 </script>
 
-<div id="adapter-container">
+</head>
+
+<body>
+
+<div id="adapter-container" class="m adapter-container">
 
 <table>
 <tr>
-<td><h3 class="translate">Touchline adapter settings</h3></td>
+<td>
+<h3 class="translate">Touchline Adapter Settings</h3>
+</td>
 </tr>
 </table>
 
-<table>
+<table class="settings-table">
 
 <tr>
-<td><label for="host" class="translate">Controller IP:</label></td>
-<td><input class="value" id="host"/></td>
+<td>
+<label for="host" class="translate">Controller IP</label>
+</td>
+<td>
+<input class="value" id="host" type="text"/>
+</td>
 </tr>
 
 <tr>
-<td><label for="pollInterval" class="translate">Polling interval:</label></td>
-<td><input class="value" id="pollInterval"/></td>
+<td>
+<label for="pollInterval" class="translate">Polling interval (seconds)</label>
+</td>
+<td>
+<input class="value" id="pollInterval" type="number"/>
+</td>
 </tr>
 
 </table>
@@ -87,5 +129,7 @@ function save(callback) {
 <p class="translate">Adapter restarts after saving configuration</p>
 
 </div>
+
+</body>
 
 </html>
