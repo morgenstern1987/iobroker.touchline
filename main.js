@@ -1,6 +1,6 @@
 'use strict';
 
-const utils    = require('@iobroker/adapter-core');
+const utils     = require('@iobroker/adapter-core');
 const LegacyAPI = require('./lib/legacy-api');
 
 class TouchlineAdapter extends utils.Adapter {
@@ -8,9 +8,9 @@ class TouchlineAdapter extends utils.Adapter {
     constructor(options = {}) {
         super({ ...options, name: 'touchline' });
 
-        this.api        = null;
-        this.pollTimer  = null;
-        this.zoneCount  = 0;
+        this.api       = null;
+        this.pollTimer = null;
+        this.zoneCount = 0;
 
         this.on('ready',       this.onReady.bind(this));
         this.on('stateChange', this.onStateChange.bind(this));
@@ -18,12 +18,11 @@ class TouchlineAdapter extends utils.Adapter {
     }
 
     /* ────────────────────────────────────────────────────────────
-       onReady – Adapter startet
+       onReady
     ──────────────────────────────────────────────────────────── */
     async onReady() {
 
-        /* Verbindungs-Indikator anlegen */
-        await this.setObjectNotExistsAsync('info.connection', {
+        await this.extendObjectAsync('info.connection', {
             type: 'state',
             common: {
                 name:  'Connection',
@@ -37,34 +36,29 @@ class TouchlineAdapter extends utils.Adapter {
         });
         await this.setStateAsync('info.connection', false, true);
 
-        /* IP-Adresse prüfen */
         const host = (this.config.host || '').trim();
         if (!host) {
-            this.log.error('Keine IP-Adresse konfiguriert. Bitte in den Adaptereinstellungen eintragen.');
+            this.log.error('Keine IP-Adresse konfiguriert – bitte in den Adaptereinstellungen eintragen.');
             return;
         }
 
         this.api = new LegacyAPI(host, this.log);
 
-        /* Raumanzahl abrufen */
         try {
             this.zoneCount = await this.api.getZoneCount();
         } catch (err) {
             this.log.error(`Touchline-Controller nicht erreichbar (${host}): ${err.message}`);
-            await this.setStateAsync('info.connection', false, true);
             return;
         }
 
         if (this.zoneCount === 0) {
-            this.log.warn('Controller erreichbar, aber keine Räume gefunden.');
+            this.log.warn('Controller erreichbar, aber keine Räume/Zonen gefunden.');
         } else {
-            this.log.info(`Touchline verbunden – ${this.zoneCount} Räume/Zonen gefunden.`);
+            this.log.info(`Touchline verbunden – ${this.zoneCount} Zone(n) gefunden.`);
         }
 
-        /* Objekte für alle Zonen anlegen */
         await this._createZoneObjects();
 
-        /* State-Subscription & ersten Poll starten */
         this.subscribeStates('zones.*.targetTemperature');
         await this._poll();
 
@@ -73,7 +67,8 @@ class TouchlineAdapter extends utils.Adapter {
     }
 
     /* ────────────────────────────────────────────────────────────
-       Zonen-Objekte anlegen (bei Bedarf)
+       Zonen-Objekte anlegen / aktualisieren
+       Nutzt extendObjectAsync damit Änderungen auch bei Updates greifen.
     ──────────────────────────────────────────────────────────── */
     async _createZoneObjects() {
         for (let i = 0; i < this.zoneCount; i++) {
@@ -81,14 +76,13 @@ class TouchlineAdapter extends utils.Adapter {
             const name = await this.api.getZoneName(i);
             const base = `zones.zone${i}`;
 
-            await this.setObjectNotExistsAsync(base, {
+            await this.extendObjectAsync(base, {
                 type:   'channel',
                 common: { name },
                 native: {}
             });
 
-            /* Ist-Temperatur */
-            await this._ensureState(`${base}.currentTemperature`, {
+            await this._defState(`${base}.currentTemperature`, {
                 name:  'Ist-Temperatur',
                 type:  'number',
                 role:  'value.temperature',
@@ -97,31 +91,27 @@ class TouchlineAdapter extends utils.Adapter {
                 write: false
             });
 
-            /* Soll-Temperatur (schreibbar) */
-            await this._ensureState(`${base}.targetTemperature`, {
+            /* Kein hardcoded min/max – kommt dynamisch vom Controller
+               nach dem ersten Poll via extendObjectAsync. */
+            await this._defState(`${base}.targetTemperature`, {
                 name:  'Soll-Temperatur',
                 type:  'number',
                 role:  'level.temperature',
                 unit:  '°C',
-                min:   5,
-                max:   40,
-                step:  0.5,
                 read:  true,
                 write: true
             });
 
-            /* Betriebsmodus */
-            await this._ensureState(`${base}.mode`, {
-                name:  'Betriebsmodus',
-                type:  'number',
-                role:  'value',
-                read:  true,
-                write: false,
+            await this._defState(`${base}.mode`, {
+                name:   'Betriebsmodus',
+                type:   'number',
+                role:   'value',
+                read:   true,
+                write:  false,
                 states: { 0: 'Auto', 1: 'Komfort', 2: 'Absenken', 3: 'Frostschutz' }
             });
 
-            /* Wochenprogramm */
-            await this._ensureState(`${base}.weekProgram`, {
+            await this._defState(`${base}.weekProgram`, {
                 name:  'Wochenprogramm',
                 type:  'number',
                 role:  'value',
@@ -129,19 +119,17 @@ class TouchlineAdapter extends utils.Adapter {
                 write: false
             });
 
-            /* Min/Max/Schrittweite */
-            await this._ensureState(`${base}.minTemp`, {
+            await this._defState(`${base}.minTemp`, {
                 name: 'Min-Temperatur', type: 'number', role: 'value.temperature', unit: '°C', read: true, write: false
             });
-            await this._ensureState(`${base}.maxTemp`, {
+            await this._defState(`${base}.maxTemp`, {
                 name: 'Max-Temperatur', type: 'number', role: 'value.temperature', unit: '°C', read: true, write: false
             });
-            await this._ensureState(`${base}.step`, {
+            await this._defState(`${base}.step`, {
                 name: 'Temperatur-Schrittweite', type: 'number', role: 'value', unit: '°C', read: true, write: false
             });
 
-            /* Online-Status */
-            await this._ensureState(`${base}.available`, {
+            await this._defState(`${base}.available`, {
                 name:  'Online',
                 type:  'boolean',
                 role:  'indicator.reachable',
@@ -152,12 +140,11 @@ class TouchlineAdapter extends utils.Adapter {
     }
 
     /* ────────────────────────────────────────────────────────────
-       Polling – alle Zonendaten auf einmal lesen
+       Poll
     ──────────────────────────────────────────────────────────── */
     async _poll() {
         if (this.zoneCount === 0) return;
 
-        /* Alle benötigten Variablen sammeln */
         const vars = [];
         for (let i = 0; i < this.zoneCount; i++) {
             vars.push(
@@ -181,18 +168,46 @@ class TouchlineAdapter extends utils.Adapter {
             return;
         }
 
-        /* States setzen */
+        /* Komplette Rohwerte im Debug-Log sichtbar machen */
+        this.log.debug(`Rohwerte vom Controller: ${JSON.stringify(data)}`);
+
         for (let i = 0; i < this.zoneCount; i++) {
             const base = `zones.zone${i}`;
 
-            await this.setStateAsync(`${base}.currentTemperature`, this._temp(data[`G${i}.RaumTemp`]),     true);
-            await this.setStateAsync(`${base}.targetTemperature`,  this._temp(data[`G${i}.SollTemp`]),     true);
-            await this.setStateAsync(`${base}.mode`,               this._int(data[`G${i}.OPMode`]),        true);
-            await this.setStateAsync(`${base}.weekProgram`,        this._int(data[`G${i}.WeekProg`]),      true);
-            await this.setStateAsync(`${base}.minTemp`,            this._temp(data[`G${i}.SollTempMinVal`]), true);
-            await this.setStateAsync(`${base}.maxTemp`,            this._temp(data[`G${i}.SollTempMaxVal`]), true);
-            await this.setStateAsync(`${base}.step`,               this._temp(data[`G${i}.SollTempStepVal`]), true);
-            await this.setStateAsync(`${base}.available`,          data[`G${i}.available`] === 'online',    true);
+            const raumTemp = this._temp(data[`G${i}.RaumTemp`]);
+            const sollTemp = this._temp(data[`G${i}.SollTemp`]);
+            const minTemp  = this._temp(data[`G${i}.SollTempMinVal`]);
+            const maxTemp  = this._temp(data[`G${i}.SollTempMaxVal`]);
+            const stepTemp = this._temp(data[`G${i}.SollTempStepVal`]);
+
+            this.log.debug(
+                `Zone ${i}: RaumTemp=${data[`G${i}.RaumTemp`]} => ${raumTemp}°C | ` +
+                `SollTemp=${data[`G${i}.SollTemp`]} => ${sollTemp}°C | ` +
+                `Min=${data[`G${i}.SollTempMinVal`]} => ${minTemp}°C | ` +
+                `Max=${data[`G${i}.SollTempMaxVal`]} => ${maxTemp}°C`
+            );
+
+            /* min/max/step dynamisch aus Controller-Werten ins State-Objekt übertragen */
+            if (minTemp > 0 || maxTemp > 0) {
+                await this.extendObjectAsync(`${base}.targetTemperature`, {
+                    type:   'state',
+                    common: {
+                        min:  minTemp  > 0 ? minTemp  : undefined,
+                        max:  maxTemp  > 0 ? maxTemp  : undefined,
+                        step: stepTemp > 0 ? stepTemp : undefined
+                    },
+                    native: {}
+                });
+            }
+
+            await this.setStateAsync(`${base}.currentTemperature`, raumTemp,                                 true);
+            await this.setStateAsync(`${base}.targetTemperature`,  sollTemp,                                 true);
+            await this.setStateAsync(`${base}.mode`,               this._int(data[`G${i}.OPMode`]),          true);
+            await this.setStateAsync(`${base}.weekProgram`,        this._int(data[`G${i}.WeekProg`]),        true);
+            await this.setStateAsync(`${base}.minTemp`,            minTemp,                                  true);
+            await this.setStateAsync(`${base}.maxTemp`,            maxTemp,                                  true);
+            await this.setStateAsync(`${base}.step`,               stepTemp,                                 true);
+            await this.setStateAsync(`${base}.available`,          data[`G${i}.available`] === 'online',     true);
         }
 
         await this.setStateAsync('info.connection', true, true);
@@ -205,11 +220,8 @@ class TouchlineAdapter extends utils.Adapter {
     async onStateChange(id, state) {
         if (!state || state.ack) return;
 
-        /* ID-Format: touchline.0.zones.zoneN.targetTemperature */
-        const parts = id.split('.');
-        if (parts.length < 5) return;
-
-        const zoneStr = parts[parts.length - 2]; // z.B. "zone3"
+        const parts   = id.split('.');
+        const zoneStr = parts[parts.length - 2];
         const field   = parts[parts.length - 1];
 
         if (field !== 'targetTemperature') return;
@@ -223,13 +235,7 @@ class TouchlineAdapter extends utils.Adapter {
         try {
             await this.api.setTargetTemperature(zoneIdx, val);
             this.log.info(`Zone ${zoneIdx}: Soll-Temperatur auf ${val} °C gesetzt.`);
-
-            /* Sofortiges Rücklesen für ack */
-            await this.setStateAsync(
-                `zones.zone${zoneIdx}.targetTemperature`,
-                val,
-                true
-            );
+            await this.setStateAsync(`zones.zone${zoneIdx}.targetTemperature`, val, true);
         } catch (err) {
             this.log.error(`Zone ${zoneIdx}: Soll-Temperatur setzen fehlgeschlagen – ${err.message}`);
         }
@@ -249,24 +255,32 @@ class TouchlineAdapter extends utils.Adapter {
     }
 
     /* ────────────────────────────────────────────────────────────
-       Hilfsmethoden
+       Helpers
     ──────────────────────────────────────────────────────────── */
 
-    /** Rohwert (×100) → °C */
+    /**
+     * Rohwert ×100 → °C
+     * Der Touchline-Controller überträgt Temperaturen als Integer ×100.
+     * Beispiel: "2150" → 21.5°C  |  "" / null / undefined → 0
+     */
     _temp(raw) {
-        const v = parseInt(raw, 10);
+        if (raw === undefined || raw === null) return 0;
+        const s = String(raw).trim();
+        if (s === '') return 0;
+        const v = parseInt(s, 10);
         return isNaN(v) ? 0 : v / 100;
     }
 
     /** Rohwert → Integer */
     _int(raw) {
-        const v = parseInt(raw, 10);
+        if (raw === undefined || raw === null) return 0;
+        const v = parseInt(String(raw).trim(), 10);
         return isNaN(v) ? 0 : v;
     }
 
-    /** State-Objekt anlegen falls nicht vorhanden */
-    async _ensureState(id, common) {
-        await this.setObjectNotExistsAsync(id, {
+    /** State-Objekt anlegen/aktualisieren (immer, nicht nur wenn nicht vorhanden) */
+    async _defState(id, common) {
+        await this.extendObjectAsync(id, {
             type:   'state',
             common: { ...common },
             native: {}
