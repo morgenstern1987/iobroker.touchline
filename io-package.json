@@ -32,7 +32,7 @@
     "enabled": true,
 
     "adminUI": {
-      "config": "materialize"
+      "config": "json"
     },
 
     "connectionType":   "local",
