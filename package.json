@@ -1,25 +1,36 @@
 {
   "name": "iobroker.touchline",
-  "version": "1.0.0",
-  "description": "ioBroker adapter for Roth Touchline legacy heating controller",
-  "author": "Henrik Morgenstern",
+  "version": "1.1.0",
+  "description": "ioBroker adapter for the Roth Touchline floor heating controller (legacy CGI API)",
+  "author": {
+    "name":  "Henrik Morgenstern",
+    "email": "henrik@example.com"
+  },
   "license": "MIT",
   "main": "main.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/morgenstern1987/iobroker.touchline"
+    "url":  "https://github.com/morgenstern1987/iobroker.touchline"
   },
   "keywords": [
     "iobroker",
     "touchline",
-    "heating"
+    "roth",
+    "floor heating",
+    "heating",
+    "climate"
   ],
   "dependencies": {
     "@iobroker/adapter-core": "^3.2.3",
-    "axios": "^1.6.7",
-    "xml2js": "^0.6.2"
+    "axios": "^1.6.7"
+  },
+  "devDependencies": {
+    "@iobroker/testing": "^5.0.0"
   },
   "engines": {
     "node": ">=18"
+  },
+  "scripts": {
+    "test": "mocha --timeout 10000 test/**/*.js"
   }
 }

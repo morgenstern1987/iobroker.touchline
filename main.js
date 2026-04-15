@@ -1,243 +1,282 @@
 'use strict';
 
-const utils = require('@iobroker/adapter-core');
+const utils    = require('@iobroker/adapter-core');
 const LegacyAPI = require('./lib/legacy-api');
 
 class TouchlineAdapter extends utils.Adapter {
 
     constructor(options = {}) {
+        super({ ...options, name: 'touchline' });
 
-        super({
-            ...options,
-            name: 'touchline'
-        });
+        this.api        = null;
+        this.pollTimer  = null;
+        this.zoneCount  = 0;
 
-        this.api = null;
-        this.pollTimer = null;
-
-        this.on('ready', this.onReady.bind(this));
+        this.on('ready',       this.onReady.bind(this));
         this.on('stateChange', this.onStateChange.bind(this));
-        this.on('unload', this.onUnload.bind(this));
+        this.on('unload',      this.onUnload.bind(this));
     }
 
+    /* ────────────────────────────────────────────────────────────
+       onReady – Adapter startet
+    ──────────────────────────────────────────────────────────── */
     async onReady() {
 
+        /* Verbindungs-Indikator anlegen */
         await this.setObjectNotExistsAsync('info.connection', {
             type: 'state',
             common: {
-                name: 'Connection',
-                type: 'boolean',
-                role: 'indicator.connected',
-                read: true,
-                write: false
+                name:  'Connection',
+                type:  'boolean',
+                role:  'indicator.connected',
+                read:  true,
+                write: false,
+                def:   false
             },
             native: {}
         });
+        await this.setStateAsync('info.connection', false, true);
 
-        const host = this.config.host;
-
+        /* IP-Adresse prüfen */
+        const host = (this.config.host || '').trim();
         if (!host) {
-            this.log.error("Keine IP gesetzt");
+            this.log.error('Keine IP-Adresse konfiguriert. Bitte in den Adaptereinstellungen eintragen.');
             return;
         }
 
-        this.api = new LegacyAPI(host);
+        this.api = new LegacyAPI(host, this.log);
 
-        let zoneCount = 0;
-
+        /* Raumanzahl abrufen */
         try {
-
-            zoneCount = await this.api.getZoneCount();
-
-        } catch (e) {
-
-            this.log.error("Touchline nicht erreichbar");
+            this.zoneCount = await this.api.getZoneCount();
+        } catch (err) {
+            this.log.error(`Touchline-Controller nicht erreichbar (${host}): ${err.message}`);
+            await this.setStateAsync('info.connection', false, true);
             return;
         }
 
-        this.log.info(`Gefundene Räume: ${zoneCount}`);
+        if (this.zoneCount === 0) {
+            this.log.warn('Controller erreichbar, aber keine Räume gefunden.');
+        } else {
+            this.log.info(`Touchline verbunden – ${this.zoneCount} Räume/Zonen gefunden.`);
+        }
 
-        for (let i = 0; i < zoneCount; i++) {
+        /* Objekte für alle Zonen anlegen */
+        await this._createZoneObjects();
+
+        /* State-Subscription & ersten Poll starten */
+        this.subscribeStates('zones.*.targetTemperature');
+        await this._poll();
+
+        const interval = Math.max(5, parseInt(this.config.pollInterval) || 30);
+        this.pollTimer = this.setInterval(() => this._poll(), interval * 1000);
+    }
+
+    /* ────────────────────────────────────────────────────────────
+       Zonen-Objekte anlegen (bei Bedarf)
+    ──────────────────────────────────────────────────────────── */
+    async _createZoneObjects() {
+        for (let i = 0; i < this.zoneCount; i++) {
 
             const name = await this.api.getZoneName(i);
             const base = `zones.zone${i}`;
 
             await this.setObjectNotExistsAsync(base, {
-                type: "channel",
+                type:   'channel',
                 common: { name },
                 native: {}
             });
 
-            await this.createNumberState(`${base}.currentTemperature`, "Ist Temperatur", false);
-            await this.createNumberState(`${base}.targetTemperature`, "Soll Temperatur", true);
-            await this.createNumberState(`${base}.mode`, "Betriebsmodus", false);
-            await this.createNumberState(`${base}.weekProgram`, "Wochenprogramm", false);
-            await this.createNumberState(`${base}.minTemp`, "Min Temperatur", false);
-            await this.createNumberState(`${base}.maxTemp`, "Max Temperatur", false);
-            await this.createNumberState(`${base}.step`, "Temp Schritt", false);
+            /* Ist-Temperatur */
+            await this._ensureState(`${base}.currentTemperature`, {
+                name:  'Ist-Temperatur',
+                type:  'number',
+                role:  'value.temperature',
+                unit:  '°C',
+                read:  true,
+                write: false
+            });
 
-            await this.setObjectNotExistsAsync(`${base}.available`, {
-                type: "state",
-                common: {
-                    name: "Verfügbar",
-                    type: "boolean",
-                    role: "indicator.reachable",
-                    read: true,
-                    write: false
-                },
-                native: {}
+            /* Soll-Temperatur (schreibbar) */
+            await this._ensureState(`${base}.targetTemperature`, {
+                name:  'Soll-Temperatur',
+                type:  'number',
+                role:  'level.temperature',
+                unit:  '°C',
+                min:   5,
+                max:   40,
+                step:  0.5,
+                read:  true,
+                write: true
+            });
+
+            /* Betriebsmodus */
+            await this._ensureState(`${base}.mode`, {
+                name:  'Betriebsmodus',
+                type:  'number',
+                role:  'value',
+                read:  true,
+                write: false,
+                states: { 0: 'Auto', 1: 'Komfort', 2: 'Absenken', 3: 'Frostschutz' }
+            });
+
+            /* Wochenprogramm */
+            await this._ensureState(`${base}.weekProgram`, {
+                name:  'Wochenprogramm',
+                type:  'number',
+                role:  'value',
+                read:  true,
+                write: false
+            });
+
+            /* Min/Max/Schrittweite */
+            await this._ensureState(`${base}.minTemp`, {
+                name: 'Min-Temperatur', type: 'number', role: 'value.temperature', unit: '°C', read: true, write: false
+            });
+            await this._ensureState(`${base}.maxTemp`, {
+                name: 'Max-Temperatur', type: 'number', role: 'value.temperature', unit: '°C', read: true, write: false
+            });
+            await this._ensureState(`${base}.step`, {
+                name: 'Temperatur-Schrittweite', type: 'number', role: 'value', unit: '°C', read: true, write: false
+            });
+
+            /* Online-Status */
+            await this._ensureState(`${base}.available`, {
+                name:  'Online',
+                type:  'boolean',
+                role:  'indicator.reachable',
+                read:  true,
+                write: false
             });
         }
-
-        this.subscribeStates("zones.*.targetTemperature");
-
-        this.poll();
-
-        this.pollTimer = setInterval(
-            () => this.poll(),
-            (this.config.pollInterval || 30) * 1000
-        );
     }
 
-    async createNumberState(id, name, write) {
+    /* ────────────────────────────────────────────────────────────
+       Polling – alle Zonendaten auf einmal lesen
+    ──────────────────────────────────────────────────────────── */
+    async _poll() {
+        if (this.zoneCount === 0) return;
 
+        /* Alle benötigten Variablen sammeln */
+        const vars = [];
+        for (let i = 0; i < this.zoneCount; i++) {
+            vars.push(
+                `G${i}.RaumTemp`,
+                `G${i}.SollTemp`,
+                `G${i}.OPMode`,
+                `G${i}.WeekProg`,
+                `G${i}.SollTempMinVal`,
+                `G${i}.SollTempMaxVal`,
+                `G${i}.SollTempStepVal`,
+                `G${i}.available`
+            );
+        }
+
+        let data;
+        try {
+            data = await this.api.readVariables(vars);
+        } catch (err) {
+            this.log.error(`Polling-Fehler: ${err.message}`);
+            await this.setStateAsync('info.connection', false, true);
+            return;
+        }
+
+        /* States setzen */
+        for (let i = 0; i < this.zoneCount; i++) {
+            const base = `zones.zone${i}`;
+
+            await this.setStateAsync(`${base}.currentTemperature`, this._temp(data[`G${i}.RaumTemp`]),     true);
+            await this.setStateAsync(`${base}.targetTemperature`,  this._temp(data[`G${i}.SollTemp`]),     true);
+            await this.setStateAsync(`${base}.mode`,               this._int(data[`G${i}.OPMode`]),        true);
+            await this.setStateAsync(`${base}.weekProgram`,        this._int(data[`G${i}.WeekProg`]),      true);
+            await this.setStateAsync(`${base}.minTemp`,            this._temp(data[`G${i}.SollTempMinVal`]), true);
+            await this.setStateAsync(`${base}.maxTemp`,            this._temp(data[`G${i}.SollTempMaxVal`]), true);
+            await this.setStateAsync(`${base}.step`,               this._temp(data[`G${i}.SollTempStepVal`]), true);
+            await this.setStateAsync(`${base}.available`,          data[`G${i}.available`] === 'online',    true);
+        }
+
+        await this.setStateAsync('info.connection', true, true);
+        this.log.debug(`Poll abgeschlossen – ${this.zoneCount} Zone(n) aktualisiert.`);
+    }
+
+    /* ────────────────────────────────────────────────────────────
+       onStateChange – Soll-Temperatur schreiben
+    ──────────────────────────────────────────────────────────── */
+    async onStateChange(id, state) {
+        if (!state || state.ack) return;
+
+        /* ID-Format: touchline.0.zones.zoneN.targetTemperature */
+        const parts = id.split('.');
+        if (parts.length < 5) return;
+
+        const zoneStr = parts[parts.length - 2]; // z.B. "zone3"
+        const field   = parts[parts.length - 1];
+
+        if (field !== 'targetTemperature') return;
+
+        const zoneIdx = parseInt(zoneStr.replace('zone', ''), 10);
+        if (isNaN(zoneIdx)) return;
+
+        const val = parseFloat(state.val);
+        if (isNaN(val)) return;
+
+        try {
+            await this.api.setTargetTemperature(zoneIdx, val);
+            this.log.info(`Zone ${zoneIdx}: Soll-Temperatur auf ${val} °C gesetzt.`);
+
+            /* Sofortiges Rücklesen für ack */
+            await this.setStateAsync(
+                `zones.zone${zoneIdx}.targetTemperature`,
+                val,
+                true
+            );
+        } catch (err) {
+            this.log.error(`Zone ${zoneIdx}: Soll-Temperatur setzen fehlgeschlagen – ${err.message}`);
+        }
+    }
+
+    /* ────────────────────────────────────────────────────────────
+       onUnload
+    ──────────────────────────────────────────────────────────── */
+    onUnload(callback) {
+        try {
+            if (this.pollTimer) {
+                this.clearInterval(this.pollTimer);
+                this.pollTimer = null;
+            }
+        } catch (_) { /* ignore */ }
+        callback();
+    }
+
+    /* ────────────────────────────────────────────────────────────
+       Hilfsmethoden
+    ──────────────────────────────────────────────────────────── */
+
+    /** Rohwert (×100) → °C */
+    _temp(raw) {
+        const v = parseInt(raw, 10);
+        return isNaN(v) ? 0 : v / 100;
+    }
+
+    /** Rohwert → Integer */
+    _int(raw) {
+        const v = parseInt(raw, 10);
+        return isNaN(v) ? 0 : v;
+    }
+
+    /** State-Objekt anlegen falls nicht vorhanden */
+    async _ensureState(id, common) {
         await this.setObjectNotExistsAsync(id, {
-            type: "state",
-            common: {
-                name,
-                type: "number",
-                role: "value.temperature",
-                read: true,
-                write
-            },
+            type:   'state',
+            common: { ...common },
             native: {}
         });
     }
-
-    async poll() {
-
-        try {
-
-            const zones = await this.api.getZoneCount();
-
-            const variables = [];
-
-            for (let i = 0; i < zones; i++) {
-
-                variables.push(`G${i}.RaumTemp`);
-                variables.push(`G${i}.SollTemp`);
-                variables.push(`G${i}.OPMode`);
-                variables.push(`G${i}.WeekProg`);
-                variables.push(`G${i}.SollTempMinVal`);
-                variables.push(`G${i}.SollTempMaxVal`);
-                variables.push(`G${i}.SollTempStepVal`);
-                variables.push(`G${i}.available`);
-            }
-
-            const data = await this.api.readVariables(variables);
-
-            for (let i = 0; i < zones; i++) {
-
-                const current = parseInt(data[`G${i}.RaumTemp`] || 0) / 100;
-                const target = parseInt(data[`G${i}.SollTemp`] || 0) / 100;
-
-                await this.setStateAsync(
-                    `zones.zone${i}.currentTemperature`,
-                    current,
-                    true
-                );
-
-                await this.setStateAsync(
-                    `zones.zone${i}.targetTemperature`,
-                    target,
-                    true
-                );
-
-                await this.setStateAsync(
-                    `zones.zone${i}.mode`,
-                    parseInt(data[`G${i}.OPMode`] || 0),
-                    true
-                );
-
-                await this.setStateAsync(
-                    `zones.zone${i}.weekProgram`,
-                    parseInt(data[`G${i}.WeekProg`] || 0),
-                    true
-                );
-
-                await this.setStateAsync(
-                    `zones.zone${i}.minTemp`,
-                    parseInt(data[`G${i}.SollTempMinVal`] || 0) / 100,
-                    true
-                );
-
-                await this.setStateAsync(
-                    `zones.zone${i}.maxTemp`,
-                    parseInt(data[`G${i}.SollTempMaxVal`] || 0) / 100,
-                    true
-                );
-
-                await this.setStateAsync(
-                    `zones.zone${i}.step`,
-                    parseInt(data[`G${i}.SollTempStepVal`] || 0) / 100,
-                    true
-                );
-
-                await this.setStateAsync(
-                    `zones.zone${i}.available`,
-                    data[`G${i}.available`] === "online",
-                    true
-                );
-            }
-
-            await this.setStateAsync("info.connection", true, true);
-
-        } catch (e) {
-
-            this.log.error("Polling Fehler: " + e.message);
-
-            await this.setStateAsync("info.connection", false, true);
-        }
-    }
-
-    async onStateChange(id, state) {
-
-        if (!state || state.ack) return;
-
-        const parts = id.split('.');
-
-        if (parts[2] !== "zones") return;
-
-        const zone = parseInt(parts[3].replace("zone", ""));
-
-        if (parts[4] === "targetTemperature") {
-
-            try {
-
-                await this.api.setTargetTemperature(zone, state.val);
-
-            } catch (e) {
-
-                this.log.error("Solltemperatur setzen fehlgeschlagen");
-            }
-        }
-    }
-
-    onUnload(callback) {
-
-        if (this.pollTimer) {
-            clearInterval(this.pollTimer);
-        }
-
-        callback();
-    }
 }
 
+/* ── Adapter-Start ───────────────────────────────────────────── */
 if (require.main !== module) {
-
     module.exports = options => new TouchlineAdapter(options);
-
 } else {
-
     new TouchlineAdapter();
 }

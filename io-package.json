@@ -1,19 +1,78 @@
 {
   "common": {
-    "name": "touchline",
-    "version": "1.0.0",
-    "title": "Touchline Legacy Adapter",
-    "mode": "daemon",
-    "type": "climate-control",
+    "name":        "touchline",
+    "version":     "1.1.0",
+    "news": {
+      "1.1.0": {
+        "en": "Improved admin UI, better error handling, unit annotations",
+        "de": "Verbesserte Admin-UI, bessere Fehlerbehandlung, Einheiten an States"
+      },
+      "1.0.0": {
+        "en": "Initial release",
+        "de": "Erstveröffentlichung"
+      }
+    },
+    "title":       "Touchline Legacy",
+    "titleLang": {
+      "en": "Roth Touchline (Legacy)",
+      "de": "Roth Touchline (Legacy)"
+    },
+    "desc": {
+      "en": "ioBroker adapter for the Roth Touchline floor heating controller (legacy CGI API)",
+      "de": "ioBroker-Adapter für die Roth Touchline Fußbodenheizungssteuerung (Legacy CGI-API)"
+    },
+
+    "authors": ["Henrik Morgenstern <henrik@example.com>"],
+    "keywords": ["touchline", "roth", "floor heating", "fußbodenheizung", "legacy"],
+    "license":  "MIT",
+    "loglevel":  "info",
+
+    "mode":    "daemon",
+    "type":    "climate-control",
     "enabled": true,
 
     "adminUI": {
       "config": "materialize"
-    }
+    },
+
+    "connectionType":   "local",
+    "dataSource":       "push",
+    "dataTransportType": "polling",
+
+    "icon": "admin/touchline.png",
+
+    "main": "main.js",
+
+    "subscribable": false,
+    "allowInit":    true,
+
+    "readme": "https://github.com/morgenstern1987/iobroker.touchline/blob/main/README.md"
   },
 
   "native": {
-    "host": "",
+    "host":         "",
     "pollInterval": 30
-  }
+  },
+
+  "objects": [
+    {
+      "_id":  "info",
+      "type": "channel",
+      "common": { "name": "Informationen" },
+      "native": {}
+    },
+    {
+      "_id":  "info.connection",
+      "type": "state",
+      "common": {
+        "name":  "Verbunden",
+        "type":  "boolean",
+        "role":  "indicator.connected",
+        "read":  true,
+        "write": false,
+        "def":   false
+      },
+      "native": {}
+    }
+  ]
 }
