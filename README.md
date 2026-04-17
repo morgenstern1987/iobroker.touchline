@@ -183,6 +183,3 @@ GET /cgi-bin/writeVal.cgi?G0.SollTemp=2200
 
 ---
 
-## Lizenz
-
-MIT – © Henrik Morgenstern
